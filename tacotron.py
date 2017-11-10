@@ -62,12 +62,14 @@ def generate_train_eval_data(text_trainset, sound_labels):
     vocab_size=len(vocabulary)
     char2index,index2char = generate_chars2numbers_mappings(vocabulary)
 
-    print("Generatirng spectrograms")
-    lin_mel = [audio_process.do_spectrogram(y=wav,sr=sr) for wav,sr in [audio_process.load_wave(sound_clip) for sound_clip in sound_labels]]
-
-    lins = [lin for lin,mel in lin_mel]
-    
-    print(len(lins))
+    print("Generating spectrograms")
+    lins = []
+    mels = []
+    for sound_clip in sound_labels:
+        wav,sr = audio_process.load_wave(sound_clip)
+        lin, mel = audio_process.do_spectrogram(y=wav,sr=sr)
+        lins.append(lin)
+        mels.append(mel)
 
     print("Converting text to integers")
     texts_numerical = text2numbers(texts_list,char2index)
@@ -97,11 +99,10 @@ def generate_train_eval_data(text_trainset, sound_labels):
             print(e)
             print("i=%s, thing to add: %s %s"%(i,texts_one_hot[i],sound_labels[i]))
 
-    eval_data = mx.nd.array(eval_data)
-    print(eval_label)
-    eval_label = mx.nd.array(eval_label)
     train_data = mx.nd.array(train_data)
     train_label = mx.nd.array(train_label)
+    eval_data = mx.nd.array(eval_data)
+    eval_label = mx.nd.array(eval_label)
 
     try:
         traindata_iterator = mx.io.NDArrayIter(data={'data':train_data},
@@ -110,7 +111,7 @@ def generate_train_eval_data(text_trainset, sound_labels):
         evaldata_iterator = mx.io.NDArrayIter(data={'data': eval_data},
                                 label={'mel': eval_label},
                                 batch_size=batch_size)
-    except Error as e:
+    except Exception as e:
         print(e)
         traceback.print_exc()
     
