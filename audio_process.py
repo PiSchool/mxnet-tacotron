@@ -3,7 +3,7 @@ import librosa as dsp
 import librosa.display as dsp_plot
 import numpy as np
 import math
-from param import Hyperparams as hp
+from params import Hyperparams as hp
 
 def load_wave(audiofilepath):
     return dsp.load(audiofilepath, mono=True)
@@ -37,7 +37,7 @@ def do_spectrogram(y=None, sr=16000,win_length=0.05,hop_length=0.0125, n_fft=204
         S_mel=np.clip((S_mel - hp.min_level_db) / -hp.min_level_db, 0, 1)
         S_lin=np.clip((S_lin - hp.min_level_db) / -hp.min_level_db, 0, 1)
 
-    return (S_lin,S_mel)
+    return S_lin,S_mel
     #print(S[:200])
 
 def spect2wav(S,denormalize=True, use_ref_db=True,win_length=0.05,hop_length=0.0125, n_fft=2048):
