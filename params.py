@@ -11,7 +11,7 @@ class Hyperparams:
     min_len = 10 if not sanity_check else 20 # minimum length of text
 
     # signal processing
-    sr = 22050 # Sampling rate. Paper => 24000
+    sr = 8000 # Sampling rate. Paper => 24000
     n_fft = 2048 # fft points (samples)
     frame_shift = 0.0125 # seconds
     frame_length = 0.05 # seconds

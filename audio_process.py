@@ -6,7 +6,7 @@ import math
 from params import Hyperparams as hp
 
 def load_wave(audiofilepath):
-    return dsp.load(audiofilepath, mono=True)
+    return dsp.load(audiofilepath,sr=hp.sr)
 
 def do_preemphasis(wave, pre_emphasis=0.97):
     return np.append(wave[0], wave[1:] - pre_emphasis * wave[:-1])
