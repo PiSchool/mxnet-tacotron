@@ -3,3 +3,4 @@ graphviz
 jupyter
 numpy
 librosa
+matplotlib
