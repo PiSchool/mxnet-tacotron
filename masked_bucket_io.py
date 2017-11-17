@@ -2,7 +2,6 @@
 # pylint: disable=superfluous-parens, no-member, invalid-name
 import sys
 
-sys.path.insert(0, "../../python")
 import numpy as np
 import mxnet as mx
 from mxnet.io import DataBatch
@@ -118,7 +117,6 @@ class DummyIter(mx.io.DataIter):
 class MaskedBucketSentenceIter(mx.io.DataIter):
     def __init__(self, source_path, target_path, source_vocab, target_vocab,
                  buckets, batch_size,
-                 source_init_states, target_init_states,
                  source_data_name='source', source_mask_name='source_mask',
                  target_data_name='target', target_mask_name='target_mask',
                  label_name='target_softmax_label',
@@ -233,16 +231,9 @@ class MaskedBucketSentenceIter(mx.io.DataIter):
         self.batch_size = batch_size
         self.make_data_iter_plan()
 
-        self.source_init_states = source_init_states
-        self.target_init_states = target_init_states
-        self.source_init_state_arrays = [mx.nd.zeros(x[1]) for x in source_init_states]
-        self.target_init_state_arrays = [mx.nd.zeros(x[1]) for x in target_init_states]
-
         self.provide_data = [(source_data_name, (batch_size, self.default_bucket_key[0])),
-                             (source_mask_name, (batch_size, self.default_bucket_key[0])),
-                             (target_data_name, (batch_size, self.default_bucket_key[1])),
-                             # (target_mask_name, (batch_size, self.default_bucket_key[1]))
-                             ] + source_init_states + target_init_states
+                             #(source_mask_name, (batch_size, self.default_bucket_key[0])),
+                             (target_data_name, (batch_size, self.default_bucket_key[1]))]
 
         self.provide_label = [(label_name, (self.batch_size, self.default_bucket_key[1]))]
 
@@ -319,18 +310,13 @@ class MaskedBucketSentenceIter(mx.io.DataIter):
         label[:] = self.label_data[i_bucket][idx]
 
         data_all = [mx.nd.array(source_data), mx.nd.array(source_mask_data)] + \
-                   [mx.nd.array(target_data),
-                    # mx.nd.array(target_mask_data)
-                    ] + \
-                   self.source_init_state_arrays + self.target_init_state_arrays
+                   [mx.nd.array(target_data)]
         label_all = [mx.nd.array(label)]
 
         bucket_key = self.buckets[i_bucket]
         provide_data = [(self.source_data_name, (self.batch_size, bucket_key[0])),
-                        (self.source_mask_name, (self.batch_size, bucket_key[0])),
-                        (self.target_data_name, (self.batch_size, bucket_key[1])),
-                        # (self.target_mask_name, (self.batch_size, bucket_key[1]))
-                        ] + self.source_init_states + self.target_init_states
+                        #(self.source_mask_name, (self.batch_size, bucket_key[0])),
+                        (self.target_data_name, (self.batch_size, bucket_key[1]))]
         provide_label = [(self.label_name, (self.batch_size, bucket_key[1]))]
 
         data_batch = DataBatch(data_all, label_all, pad=0,
