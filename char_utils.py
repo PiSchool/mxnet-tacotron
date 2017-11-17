@@ -41,7 +41,7 @@ string=generate_strings(max_string_len-2, max_string_len-1)
 print(string, len(string))
 assert ints2text(text2ints(string)) == string
 
-def generate_chars_train_eval_sets(dataset_size):
+def generate_train_eval_sets(dataset_size):
     train_set = [text2ints(generate_strings(max_string_len-2, max_string_len-1)) for _ in range(dataset_size)]
     inverse_train_set = [[char2int[SOS]]+sentence[1:-1][::-1]+[char2int[EOS]] for sentence in train_set]
     
@@ -50,7 +50,7 @@ def generate_chars_train_eval_sets(dataset_size):
  
     return train_set, inverse_train_set, eval_set, inverse_eval_set
     
-def generate_chars_iterators(train_set, label_set, batch_size):
+def generate_iterator(train_set, label_set, batch_size):
     return mx.io.NDArrayIter(
         data=mx.nd.one_hot(mx.nd.array(train_set),vocab_size),
     label=mx.nd.one_hot(mx.nd.array(label_set),vocab_size),
