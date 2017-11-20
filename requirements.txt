@@ -1,4 +1,4 @@
-mxnet==0.12.0
+mxnet==0.12.1
 graphviz
 jupyter
 numpy
