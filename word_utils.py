@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+
+# A LOT OF UTILITIES TO READING A TEXT, EXTRACTING THE VOCABULARY, SPLITTING INTO DATASET/EVALSET, CONVERTING TO INTEGER OR ONE-HOT REPRESENTATION AND BACK
+
 from random import choice, randrange
 import mxnet as mx
 import numpy as np
 import re
 import string
 from OneHotIterator import OneHotIterator
+
 
 def read_content(path):
     with open(path) as ins:
@@ -24,7 +28,7 @@ def content_to_list(path):
     content = content.split('\n')
     return content
 
-def build_vocab(path):
+def build_vocab(path='english'):
     content = tokenize(read_content(path))
     content = content.replace('\n', ' <eos> ')
     content = re.sub('  ',' ',content)
@@ -56,7 +60,7 @@ def append_eos_to_list_of_sentences(sentences):
         sentences[i]+=' <eos>'
     return sentences
 
-vocabulary_en, reverse_vocabulary_en = build_vocab('english')
+vocabulary_en, reverse_vocabulary_en = build_vocab()
 #vocabulary_it, reverse_vocabulary_it = build_vocab('italian')
 
 vocab_size_train = len(vocabulary_en)
@@ -79,8 +83,8 @@ def text2ints(sentence, vocabulary):
     words = [vocabulary[w] for w in words if len(w) > 0]
     return words
 
-def generate_train_eval_sets(dataset_size, max_len=0):
-    source_list = content_to_list('english')[:dataset_size]
+def generate_train_eval_sets(dataset_size, filename='english', max_len=0):
+    source_list = content_to_list(filename)[:dataset_size]
     target_list = [' '.join(sentence.split(' ')[::-1]) for sentence in source_list]
 
     source_list = append_eos_to_list_of_sentences(source_list)
@@ -119,16 +123,6 @@ def generate_train_eval_sets(dataset_size, max_len=0):
 
     return train_set, inverse_train_set, eval_set, inverse_eval_set, max_len
     
-def generate_iterator(train_set, label_set, batch_size):
-    train_one_hot = mx.nd.one_hot(mx.nd.array(train_set),vocab_size_train)
-    label_one_hot = mx.nd.one_hot(mx.nd.array(label_set),vocab_size_label)
-
-    return mx.io.NDArrayIter(
-        data=train_one_hot,
-        label=label_one_hot,
-        batch_size=batch_size
-    )
-
 def generate_OH_iterator(train_set, label_set, batch_size, max_len):
     return OneHotIterator(
         data=train_set,
@@ -141,20 +135,3 @@ def generate_OH_iterator(train_set, label_set, batch_size, max_len):
         vocab_size_label=vocab_size_label,
         batch_size=batch_size
     )
-"""
-train_set, inverse_train_set, eval_set, inverse_eval_set, max_len = generate_train_eval_sets(dataset_size=1000)
-
-train_iter = generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_len, batch_size=100)
-
-train_iter.reset()
-try:
-    while True:
-        item= train_iter.next()
-        print(item)
-        print(item.provide_data)
-        print(item.provide_label)
-        print(item.data)
-        print(item.label)
-except StopIteration:
-    print("end of iteration")
-"""

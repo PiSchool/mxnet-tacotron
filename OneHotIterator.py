@@ -1,5 +1,7 @@
 import mxnet as mx
 
+# THIS IS A VERY SIMPLE ITERATOR THAT, TAKEN A LIST OF SENTENCES ENCODED AS INTEGERS, OUTPUTS THE BATCHES IN ONE HOT FORM (TO OVERCOME MEMORY ALLOCATION ISSUES)
+
 class OneHotIterator(mx.io.DataIter):
     def __init__(self,
                  data, label,
