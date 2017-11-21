@@ -6,8 +6,18 @@ class OneHotIterator(mx.io.DataIter):
                  data_names, max_len_data, vocab_size_data,
                  label_names, max_len_label, vocab_size_label,
                  batch_size=10):
-        self._provide_data = zip(data_names, [(batch_size, max_len_data, vocab_size_label)])
-        self._provide_label = zip(label_names, [(batch_size, max_len_label, vocab_size_label)])
+        self._provide_data = [
+            mx.io.DataDesc(
+                name=data_names,
+                shape=(batch_size, max_len_data, vocab_size_data),
+                layout='NTC')
+        ]
+        self._provide_label = [
+            mx.io.DataDesc(
+                name=label_names,
+                shape=(batch_size, max_len_label, vocab_size_label),
+                layout='NTC')
+        ]
         self.num_batches = len(data)//batch_size
         self.batch_size = batch_size
         self.cur_data_pointer = 0
@@ -50,6 +60,11 @@ class OneHotIterator(mx.io.DataIter):
             label = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_label)]
             data = [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_data)]
             
-            return mx.io.DataBatch(data, label)
+            return mx.io.DataBatch(
+                data,
+                label,
+                provide_data=self._provide_data,
+                provide_label=self._provide_label
+            )
         else:
             raise StopIteration

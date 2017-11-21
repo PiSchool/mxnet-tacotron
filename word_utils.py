@@ -133,20 +133,28 @@ def generate_OH_iterator(train_set, label_set, batch_size, max_len):
     return OneHotIterator(
         data=train_set,
         label=label_set,
-        data_names=['data'],
+        data_names='data',
         max_len_data=max_len,
         vocab_size_data=vocab_size_train,
-        label_names=['softmax_label'],
+        label_names='softmax_label',
         max_len_label=max_len,
         vocab_size_label=vocab_size_label,
         batch_size=batch_size
     )
+"""
+train_set, inverse_train_set, eval_set, inverse_eval_set, max_len = generate_train_eval_sets(dataset_size=1000)
 
-#train_set, inverse_train_set, eval_set, inverse_eval_set, max_len = generate_train_eval_sets(dataset_size=10000)
+train_iter = generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_len, batch_size=100)
 
-#train_iter = generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_len, batch_size=1)
-
-#train_iter.reset()
-#item= train_iter.next()
-#print(item)
-#print(item.data)
+train_iter.reset()
+try:
+    while True:
+        item= train_iter.next()
+        print(item)
+        print(item.provide_data)
+        print(item.provide_label)
+        print(item.data)
+        print(item.label)
+except StopIteration:
+    print("end of iteration")
+"""

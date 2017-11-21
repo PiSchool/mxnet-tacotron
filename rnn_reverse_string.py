@@ -1,10 +1,10 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
-get_ipython().run_line_magic('matplotlib', 'inline')
+#get_ipython().run_line_magic('matplotlib', 'inline')
 import mxnet as mx
 ctx=mx.cpu(0)
 import logging
@@ -12,16 +12,16 @@ logging.getLogger().setLevel(logging.DEBUG)
 from word_utils import *
 
 
-# In[2]:
+# In[ ]:
 
 
 num_hidden=64
 embed_size=64
-batch_size=10
+batch_size=100
 dataset_size=10000
 
 
-# In[3]:
+# In[ ]:
 
 
 train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len = generate_train_eval_sets(dataset_size=dataset_size)
@@ -30,7 +30,7 @@ train_iter = generate_OH_iterator(train_set=train_set, label_set=inverse_train_s
 eval_iter = generate_OH_iterator(train_set=eval_set, label_set=inverse_eval_set, batch_size=batch_size, max_len=max_string_len)
 
 
-# In[4]:
+# In[ ]:
 
 
 data = mx.sym.Variable('data')
@@ -83,7 +83,7 @@ out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
 net = mx.sym.LinearRegressionOutput(data=out, label=label)
 
 
-# In[1]:
+# In[ ]:
 
 
 model = mx.module.Module(net)
