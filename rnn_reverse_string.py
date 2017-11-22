@@ -173,7 +173,7 @@ else:
 
         print("Checkpoint loaded, resuming training")
 
-        net_model.fit(
+        model.fit(
             train_iter,
             eval_data=eval_iter,
             eval_metric='acc',
@@ -186,8 +186,6 @@ else:
             begin_epoch=latest_epoch,
             num_epoch=max_epoch
         )
-        latest=str(max_epoch).zfill(4)
-        model_params=model_prefix+'-'+latest+'.params'
     else:
         #start from zero
         print("No checkpoint found, starting from the beginning")
@@ -206,6 +204,10 @@ else:
     print("Cleaning up")
     for f in glob.glob(model_prefix+'-*.params'):
             os.remove(f)  
+
+    latest=str(max_epoch).zfill(4)
+    model_params=model_prefix+'-'+latest+'.params'
+
     print("Saving model %s" % model_params)
     model.save_params(model_params)
     print("Model saved")
@@ -246,7 +248,7 @@ print("Vocabulary label size:", vocab_size_label)
 print("Max words in sentence:", max_string_len)
 eval_iter.reset()
 
-predictions=model.predict(eval_iter)
+predictions=model.predict(test_iter)
 
 match_count=0
 for i,pred in enumerate(predictions):
