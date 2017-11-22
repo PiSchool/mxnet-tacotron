@@ -6,10 +6,11 @@ import mxnet as mx
 import os.path
 import glob
 import logging
+import pickle
 from word_utils import *
 
 logging.getLogger().setLevel(logging.DEBUG)
-ctx=mx.gpu(0)
+ctx=mx.cpu(0)
 
 num_hidden=64
 embed_size=64
@@ -17,13 +18,51 @@ batch_size=50
 dataset_size=1000
 desired_max_len=10 # 0 for unbounded
 
+model_prefix='reverse-string'
+
 # DATASETS AND ITERATORS GENERATION
-train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len, vocabulary_en, reverse_vocabulary_en = generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
+
+# TO RESUME A PREVIOUSLY TRAINED MODEL, WE NEED PARAMS, SHAPES AND VOCABULARIES, SINCE THE LATTERS PLAY A ROLE IN THE NETWORK TOPOLOGY
+
+vocabulary_en_pickled_filename = model_prefix+"-vocabulary_en.pickled"
+reverse_vocabulary_en_pickled_filename = model_prefix+"-reverse_vocabulary_en.pickled"
+max_string_len_pickled_filename = model_prefix+"-max_string_len.pickled"
+
+if os.path.exists(vocabulary_en_pickled_filename) and os.path.exists(reverse_vocabulary_en_pickled_filename) and os.path.exists(max_string_len_pickled_filename):
+    max_string_len = pickle.load( open( max_string_len_pickled_filename, "rb" ) )
+    vocabulary_en = pickle.load( open( vocabulary_en_pickled_filename, "rb" ) )
+    reverse_vocabulary_en = pickle.load( open( reverse_vocabulary_en_pickled_filename, "rb" ) )
+
+    train_set, inverse_train_set, eval_set, inverse_eval_set, _, _, _ = generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
+
+    # ensure sets fit the size
+    for i,sentence in enumerate(train_set):
+        if len(sentence) > max_string_len:
+            train_set[i] = sentence[:max_string_len]
+        if len(sentence) < max_string_len:
+            train_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+    for i,sentence in enumerate(inverse_train_set):
+        if len(sentence) > max_string_len:
+            inverse_train_set[i] = sentence[:max_string_len]
+        if len(sentence) < max_string_len:
+            inverse_train_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+    for i,sentence in enumerate(eval_set):
+        if len(sentence) > max_string_len:
+            eval_set[i] = sentence[:max_string_len]
+        if len(sentence) < max_string_len:
+            eval_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+    for i,sentence in enumerate(inverse_eval_set):
+        if len(sentence) > max_string_len:
+            inverse_eval_set[i] = sentence[:max_string_len]
+        if len(sentence) < max_string_len:
+            inverse_eval_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+else:
+    train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len, vocabulary_en, reverse_vocabulary_en = generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
 
 vocab_size_train = len(vocabulary_en)
 vocab_size_label = len(reverse_vocabulary_en)
 
-print("STATS")
+print("TRAIN STATS")
 print("Train set size:", len(train_set))
 print("Eval set size:", len(eval_set))
 print("Vocabulary train size:", vocab_size_train)
@@ -83,12 +122,12 @@ out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
 net = mx.sym.LinearRegressionOutput(data=out, label=label)
 
 # FIT THE MODEL
-model = mx.module.Module(net)
+model = mx.module.Module(net, context=ctx)
 
-model_prefix='reverse-string'
 
 max_epoch=8
-latest_epoch=0
+
+latest_epoch=0 # dummy, don't change
 for f in glob.glob(model_prefix+'-*.params'):
     latest_epoch=max(latest_epoch,int(f.split(model_prefix)[1].split('-')[1].split('.')[0]))
 latest=str(latest_epoch).zfill(4)
@@ -98,25 +137,61 @@ model_symbols=model_prefix+'-symbol.json'
 
 if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch==latest_epoch:
     print("Model %s found, loading" % model_params)
+    sym, arg_params, aux_params = mx.model.load_checkpoint(model_prefix,latest_epoch)
+
+    model.bind(
+        data_shapes=train_iter.provide_data,
+        label_shapes=train_iter.provide_label
+    )
+
+    model.set_params(arg_params, aux_params)
+
+    print("Model loaded")
 
 else:
+    if not os.path.exists(model_params):
+        print("File %s not found" % model_params)
+    if not os.path.exists(model_symbols):
+        print("File %s not found" % model_symbols)
+    if max_epoch!=latest_epoch:
+        print("Epoch mismatch")
+
     #resume model
     print("Model %s not found, trying checkpoint" % model_params)
     
     latest_epoch=0
     for f in glob.glob(model_prefix+'-*.params'):
-        latest_epoch=max(latest_epoch,int(f.split('mnist')[1].split('-')[1].split('.')[0]))
+        latest_epoch=max(latest_epoch,int(f.split(model_prefix)[1].split('-')[1].split('.')[0]))
     latest=str(latest_epoch).zfill(4)
     latest_checkpoint=model_prefix+'-'+latest+'.params'
 
     if os.path.exists(latest_checkpoint):
         
         print("Checkpoint %s found, loading" % latest_checkpoint)
+
+        sym, arg_params, aux_params = mx.model.load_checkpoint(model_prefix, latest_epoch)
+
+        print("Checkpoint loaded, resuming training")
+
+        net_model.fit(
+            train_iter,
+            eval_data=eval_iter,
+            eval_metric='acc',
+            optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
+            initializer=mx.initializer.Xavier(),
+            batch_end_callback = mx.callback.Speedometer(batch_size, 10),
+            epoch_end_callback = mx.callback.do_checkpoint(model_prefix),
+            arg_params=arg_params,
+            aux_params=aux_params,
+            begin_epoch=latest_epoch,
+            num_epoch=max_epoch
+        )
+        latest=str(max_epoch).zfill(4)
+        model_params=model_prefix+'-'+latest+'.params'
     else:
         #start from zero
         print("No checkpoint found, starting from the beginning")
 
-        """
         model.fit(
             train_data=train_iter,
             eval_data=eval_iter,
@@ -125,9 +200,8 @@ else:
             initializer=mx.initializer.Xavier(),
             batch_end_callback=mx.callback.Speedometer(batch_size, 10),
             epoch_end_callback = mx.callback.do_checkpoint(model_prefix),
-            num_epoch=8
+            num_epoch=max_epoch
         )
-        """
 
     print("Cleaning up")
     for f in glob.glob(model_prefix+'-*.params'):
@@ -135,3 +209,63 @@ else:
     print("Saving model %s" % model_params)
     model.save_params(model_params)
     print("Model saved")
+
+    print("Saving vocabulary")
+    pickle.dump(vocabulary_en, open(vocabulary_en_pickled_filename, "wb" ))
+    pickle.dump(reverse_vocabulary_en, open(reverse_vocabulary_en_pickled_filename, "wb" ))
+    print("Vocabulary saved")
+
+    print("Saving max_string_len")
+    pickle.dump(max_string_len, open(max_string_len_pickled_filename, "wb" ))
+    print("max_string_len saved")
+
+
+import difflib
+
+testset_size=100
+
+test_set, inverse_test_set, _, _, _, _, _ = generate_train_eval_sets(desired_dataset_size=testset_size, max_len=desired_max_len)
+
+for i,sentence in enumerate(test_set):
+    if len(sentence) > max_string_len:
+        test_set[i] = sentence[:max_string_len]
+    if len(sentence) < max_string_len:
+        test_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+for i,sentence in enumerate(inverse_test_set):
+    if len(sentence) > max_string_len:
+        inverse_test_set[i] = sentence[:max_string_len]
+    if len(sentence) < max_string_len:
+        inverse_test_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+
+test_iter = generate_OH_iterator(train_set=test_set, label_set=inverse_test_set, max_len=max_string_len, batch_size=1, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
+
+print("TEST STATS")
+print("Train set size:", len(test_set))
+print("Vocabulary train size:", vocab_size_train)
+print("Vocabulary label size:", vocab_size_label)
+print("Max words in sentence:", max_string_len)
+eval_iter.reset()
+
+predictions=model.predict(eval_iter)
+
+match_count=0
+for i,pred in enumerate(predictions):
+    matched = ints2text(onehot2int(mx.ndarray.round(predictions[i]))) == ints2text(inverse_test_set[i])
+    if matched:
+        match_count+=1
+    else:
+        print(i)
+        inverse=ints2text(inverse_test_set[i])
+        print(inverse)
+        inverse_pred=ints2text(onehot2int(mx.ndarray.round(predictions[i])))
+        print(inverse_pred)
+        print(matched)
+        for i,s in enumerate(difflib.ndiff(inverse, inverse_pred)):
+            if s[0]==' ': continue
+            elif s[0]=='-':
+                print(u'Delete "{}" from position {}'.format(s[-1],i))
+            elif s[0]=='+':
+                print(u'Add "{}" to position {}'.format(s[-1],i))
+        print("--------------------")
+
+print("Matched %d/%d times" % (match_count,testset_size))
