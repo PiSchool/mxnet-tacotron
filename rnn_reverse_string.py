@@ -12,13 +12,26 @@ from word_utils import *
 num_hidden=64
 embed_size=64
 batch_size=50
-dataset_size=5000
+dataset_size=1000
+desired_max_len=10 # 0 for unbounded
 
 # DATASETS AND ITERATORS GENERATION
-train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len = generate_train_eval_sets(dataset_size=dataset_size)
+train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len, vocabulary_en, reverse_vocabulary_en = generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
 
-train_iter = generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, batch_size=batch_size, max_len=max_string_len)
-eval_iter = generate_OH_iterator(train_set=eval_set, label_set=inverse_eval_set, batch_size=batch_size, max_len=max_string_len)
+vocab_size_train = len(vocabulary_en)
+vocab_size_label = len(reverse_vocabulary_en)
+
+print("STATS")
+print("Train set size:", len(train_set))
+print("Eval set size:", len(eval_set))
+print("Vocabulary train size:", vocab_size_train)
+print("Vocabulary label size:", vocab_size_label)
+print("Max words in sentence:", max_string_len)
+
+train_iter = generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_string_len, batch_size=batch_size, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
+
+
+eval_iter = generate_OH_iterator(train_set=eval_set, label_set=inverse_eval_set, batch_size=batch_size, max_len=max_string_len, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 # NETWORK DEFINITION
 data = mx.sym.Variable('data')
