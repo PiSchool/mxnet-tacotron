@@ -1,13 +1,15 @@
 # coding: utf-8
 
-# THIS IS A BASIC TESTCASE OF MXNET FAILING IN READING THE DATA FED BY THE CUSTOM ONE HOT ITERATOR
+# RECURRENT NETWORK THAT REVERSES A SENTENCE
 
 import mxnet as mx
-ctx=mx.cpu(0)
+import os.path
+import glob
 import logging
-logging.getLogger().setLevel(logging.DEBUG)
 from word_utils import *
 
+logging.getLogger().setLevel(logging.DEBUG)
+ctx=mx.gpu(0)
 
 num_hidden=64
 embed_size=64
@@ -83,13 +85,53 @@ net = mx.sym.LinearRegressionOutput(data=out, label=label)
 # FIT THE MODEL
 model = mx.module.Module(net)
 
-# THIS RESULTS IN A BAD ALLOCATION AND A HASTY CORE DUMP..
-model.fit(
-    train_data=train_iter,
-    eval_data=eval_iter,
-    eval_metric = 'acc',
-    optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
-    initializer=mx.initializer.Xavier(),
-    batch_end_callback=mx.callback.Speedometer(batch_size, 10),
-    num_epoch=8
-)
+model_prefix='reverse-string'
+
+max_epoch=8
+latest_epoch=0
+for f in glob.glob(model_prefix+'-*.params'):
+    latest_epoch=max(latest_epoch,int(f.split(model_prefix)[1].split('-')[1].split('.')[0]))
+latest=str(latest_epoch).zfill(4)
+
+model_params=model_prefix+'-'+latest+'.params'
+model_symbols=model_prefix+'-symbol.json'
+
+if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch==latest_epoch:
+    print("Model %s found, loading" % model_params)
+
+else:
+    #resume model
+    print("Model %s not found, trying checkpoint" % model_params)
+    
+    latest_epoch=0
+    for f in glob.glob(model_prefix+'-*.params'):
+        latest_epoch=max(latest_epoch,int(f.split('mnist')[1].split('-')[1].split('.')[0]))
+    latest=str(latest_epoch).zfill(4)
+    latest_checkpoint=model_prefix+'-'+latest+'.params'
+
+    if os.path.exists(latest_checkpoint):
+        
+        print("Checkpoint %s found, loading" % latest_checkpoint)
+    else:
+        #start from zero
+        print("No checkpoint found, starting from the beginning")
+
+        """
+        model.fit(
+            train_data=train_iter,
+            eval_data=eval_iter,
+            eval_metric = 'acc',
+            optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
+            initializer=mx.initializer.Xavier(),
+            batch_end_callback=mx.callback.Speedometer(batch_size, 10),
+            epoch_end_callback = mx.callback.do_checkpoint(model_prefix),
+            num_epoch=8
+        )
+        """
+
+    print("Cleaning up")
+    for f in glob.glob(model_prefix+'-*.params'):
+            os.remove(f)  
+    print("Saving model %s" % model_params)
+    model.save_params(model_params)
+    print("Model saved")
