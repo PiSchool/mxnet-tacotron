@@ -36,26 +36,10 @@ if os.path.exists(vocabulary_en_pickled_filename) and os.path.exists(reverse_voc
     train_set, inverse_train_set, eval_set, inverse_eval_set, _, _, _ = word_utils.generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
 
     # ensure sets fit the size
-    for i,sentence in enumerate(train_set):
-        if len(sentence) > max_string_len:
-            train_set[i] = sentence[:max_string_len]
-        if len(sentence) < max_string_len:
-            train_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
-    for i,sentence in enumerate(inverse_train_set):
-        if len(sentence) > max_string_len:
-            inverse_train_set[i] = sentence[:max_string_len]
-        if len(sentence) < max_string_len:
-            inverse_train_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
-    for i,sentence in enumerate(eval_set):
-        if len(sentence) > max_string_len:
-            eval_set[i] = sentence[:max_string_len]
-        if len(sentence) < max_string_len:
-            eval_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
-    for i,sentence in enumerate(inverse_eval_set):
-        if len(sentence) > max_string_len:
-            inverse_eval_set[i] = sentence[:max_string_len]
-        if len(sentence) < max_string_len:
-            inverse_eval_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+    train_set = word_utils.pad_set(train_set, max_string_len)
+    inverse_train_set = word_utils.pad_set(inverse_train_set, max_string_len)
+    eval_set = word_utils.pad_set(eval_set, max_string_len)
+    inverse_eval_set = word_utils.pad_set(inverse_eval_set, max_string_len)
 else:
     train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len, vocabulary_en, reverse_vocabulary_en = word_utils.generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
 
@@ -228,16 +212,8 @@ testset_size=100
 
 test_set, inverse_test_set, _, _, _, _, _ = word_utils.generate_train_eval_sets(desired_dataset_size=testset_size, max_len=desired_max_len)
 
-for i,sentence in enumerate(test_set):
-    if len(sentence) > max_string_len:
-        test_set[i] = sentence[:max_string_len]
-    if len(sentence) < max_string_len:
-        test_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
-for i,sentence in enumerate(inverse_test_set):
-    if len(sentence) > max_string_len:
-        inverse_test_set[i] = sentence[:max_string_len]
-    if len(sentence) < max_string_len:
-        inverse_test_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+test_set = word_utils.pad_set(test_set, max_string_len)
+inverse_test_set = word_utils.pad_set(inverse_test_set, max_string_len)
 
 test_iter = word_utils.generate_OH_iterator(train_set=test_set, label_set=inverse_test_set, max_len=max_string_len, batch_size=1, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
@@ -246,7 +222,6 @@ print("Train set size:", len(test_set))
 print("Vocabulary train size:", vocab_size_train)
 print("Vocabulary label size:", vocab_size_label)
 print("Max words in sentence:", max_string_len)
-eval_iter.reset()
 
 predictions=model.predict(test_iter)
 

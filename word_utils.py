@@ -23,6 +23,8 @@ def read_content(path, dataset_size=10000):
 
 def tokenize(content):
     content = content.lower()
+    content = re.sub('\r\n','\n',content)
+    content = re.sub('\r','\n',content)
     content = re.sub(r'[^\w\s^<>]',' ',content)
     content = re.sub(r'[0-9]+','<num>',content)
     content = re.sub('http.*? ',' <url> ',content)
@@ -84,6 +86,14 @@ def text2ints(sentence, vocabulary):
     words = sentence.split(' ')
     words = [vocabulary[w] for w in words if len(w) > 0]
     return words
+
+def pad_set(test_set, max_string_len):
+    for i,sentence in enumerate(test_set):
+        if len(sentence) > max_string_len:
+            test_set[i] = sentence[:max_string_len]
+        if len(sentence) < max_string_len:
+            test_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
+    return test_set
 
 def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
     source_list = content_to_list(path, desired_dataset_size)
