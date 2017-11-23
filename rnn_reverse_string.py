@@ -10,7 +10,7 @@ import pickle
 import word_utils
 
 logging.getLogger().setLevel(logging.DEBUG)
-ctx=mx.cpu(0)
+ctx=mx.gpu(0)
 
 num_hidden=64
 embed_size=64
@@ -211,7 +211,7 @@ else:
 
 import difflib
 
-testset_size=100
+testset_size=10
 
 test_set, inverse_test_set, _, _, _, _, _ = word_utils.generate_train_eval_sets(desired_dataset_size=testset_size, max_len=desired_max_len)
 
@@ -234,14 +234,14 @@ predictions=model.predict(test_iter)
 
 match_count=0
 for i,pred in enumerate(predictions):
-    matched = word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i])), reverse_vocabulary_en) == word_utils.ints2text(inverse_test_set[i], reverse_vocabulary_en)
+    matched = word_utils.ints2text(word_utils.onehot2int(predictions[i]), reverse_vocabulary_en) == word_utils.ints2text(inverse_test_set[i], reverse_vocabulary_en)
     if matched:
         match_count+=1
     else:
         print(i)
         inverse=word_utils.ints2text(inverse_test_set[i], reverse_vocabulary_en)
         print(inverse)
-        inverse_pred=word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i])), reverse_vocabulary_en)
+        inverse_pred=word_utils.ints2text(word_utils.onehot2int(predictions[i]), reverse_vocabulary_en)
         print(inverse_pred)
         print(matched)
         for i,s in enumerate(difflib.ndiff(inverse, inverse_pred)):
