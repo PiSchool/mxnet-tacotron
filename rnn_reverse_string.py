@@ -15,7 +15,7 @@ ctx=mx.cpu(0)
 num_hidden=64
 embed_size=64
 batch_size=50
-dataset_size=1000
+dataset_size=10000
 desired_max_len=10 # 0 for unbounded
 
 model_prefix='reverse-string-hemingway'
@@ -234,14 +234,14 @@ predictions=model.predict(test_iter)
 
 match_count=0
 for i,pred in enumerate(predictions):
-    matched = word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i]))) == word_utils.ints2text(inverse_test_set[i])
+    matched = word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i])), reverse_vocabulary_en) == word_utils.ints2text(inverse_test_set[i], reverse_vocabulary_en)
     if matched:
         match_count+=1
     else:
         print(i)
-        inverse=word_utils.ints2text(inverse_test_set[i])
+        inverse=word_utils.ints2text(inverse_test_set[i], reverse_vocabulary_en)
         print(inverse)
-        inverse_pred=word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i])))
+        inverse_pred=word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i])), reverse_vocabulary_en)
         print(inverse_pred)
         print(matched)
         for i,s in enumerate(difflib.ndiff(inverse, inverse_pred)):
