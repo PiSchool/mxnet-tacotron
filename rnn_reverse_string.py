@@ -59,11 +59,12 @@ train_iter = word_utils.generate_OH_iterator(train_set=train_set, label_set=inve
 eval_iter = word_utils.generate_OH_iterator(train_set=eval_set, label_set=inverse_eval_set, batch_size=batch_size, max_len=max_string_len, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 # NETWORK DEFINITION
-data = mx.sym.Variable('data')
+source = mx.sym.Variable('source')
+target = mx.sym.Variable('target')
 label = mx.sym.Variable('softmax_label')
 
 embed = mx.sym.Embedding(
-    data=data,
+    data=source,
     input_dim=vocab_size_train, 
     output_dim=embed_size
 )
@@ -87,8 +88,9 @@ encoder_state = mx.sym.concat(encoder_state[0][0],encoder_state[1][0])
 decoder = mx.rnn.GRUCell(num_hidden=num_hidden*2)
 
 rnn_output, decoder_state = decoder.unroll(
-    length=num_hidden*2,
-    inputs=encoder_state,
+    length=max_string_len,
+    begin_state=encoder_state,
+    inputs=target,
     merge_outputs=True
 )
 
@@ -106,7 +108,7 @@ out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
 net = mx.sym.LinearRegressionOutput(data=out, label=label)
 
 # FIT THE MODEL
-model = mx.module.Module(net, context=ctx)
+model = mx.module.Module(net, data_names=['source','target'], context=ctx)
 
 
 max_epoch=8

@@ -10,9 +10,9 @@ class OneHotIterator(mx.io.DataIter):
                  batch_size=10):
         self._provide_data = [
             mx.io.DataDesc(
-                name=data_names,
+                name=data_name,
                 shape=(batch_size, max_len_data, vocab_size_data),
-                layout='NTC')
+                layout='NTC') for data_name in data_names
         ]
         self._provide_label = [
             mx.io.DataDesc(
@@ -60,7 +60,8 @@ class OneHotIterator(mx.io.DataIter):
                 self.cur_data_pointer+=1
 
             label = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_label)]
-            data = [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_data)]
+            data = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_data)] + \
+                [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_data)]
 
             return mx.io.DataBatch(
                 data,

@@ -207,7 +207,7 @@ def generate_OH_iterator(train_set, label_set, batch_size, max_len, vocab_size_d
     return OneHotIterator(
         data=train_set,
         label=label_set,
-        data_names='data',
+        data_names=['source','target'],
         max_len_data=max_len,
         vocab_size_data=vocab_size_data,
         label_names='softmax_label',
