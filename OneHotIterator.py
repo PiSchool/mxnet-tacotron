@@ -66,6 +66,7 @@ class OneHotIterator(mx.io.DataIter):
             return mx.io.DataBatch(
                 data,
                 label,
+		pad=0,
                 provide_data=self._provide_data,
                 provide_label=self._provide_label
             )
