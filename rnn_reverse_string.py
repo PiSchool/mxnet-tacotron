@@ -35,7 +35,7 @@ if os.path.exists(vocabulary_en_pickled_filename) and os.path.exists(reverse_voc
 
     train_set, inverse_train_set, eval_set, inverse_eval_set, _, _, _ = word_utils.generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
 
-    # ensure sets fit the size
+    # ensure sets fit the size mandated by max_string_len
     train_set = word_utils.pad_set(train_set, max_string_len)
     inverse_train_set = word_utils.pad_set(inverse_train_set, max_string_len)
     eval_set = word_utils.pad_set(eval_set, max_string_len)
@@ -112,6 +112,8 @@ model = mx.module.Module(net, context=ctx)
 max_epoch=8
 
 latest_epoch=0 # dummy, don't change
+
+# search for files matching the pattern of our serialized model
 for f in glob.glob(model_prefix+'-*.params'):
     latest_epoch=max(latest_epoch,int(f.split(model_prefix)[1].split('-')[1].split('.')[0]))
 latest=str(latest_epoch).zfill(4)
@@ -205,12 +207,15 @@ else:
     pickle.dump(max_string_len, open(max_string_len_pickled_filename, "wb" ))
     print("max_string_len saved")
 
+# TEST WITH UNSEEN DATA (IN THIS CASE IS EVEN SEEN DATA DUE TO THE LOUSY WAY I GENERATE A TEST SET, BUT IT DOESN'T MATER SINCE IT DOESN'T PREDICT ANYTHING)
 
 import difflib
 
 testset_size=100
 
 test_set, inverse_test_set, _, _, _, _, _ = word_utils.generate_train_eval_sets(desired_dataset_size=testset_size, max_len=desired_max_len)
+
+# normalize data to the shapes used during training
 
 test_set = word_utils.pad_set(test_set, max_string_len)
 inverse_test_set = word_utils.pad_set(inverse_test_set, max_string_len)
@@ -222,6 +227,8 @@ print("Train set size:", len(test_set))
 print("Vocabulary train size:", vocab_size_train)
 print("Vocabulary label size:", vocab_size_label)
 print("Max words in sentence:", max_string_len)
+
+# PREDICT WITH THE MODEL AND ENJOY THE CRASH. IT DOESN'T HAPPEN WITH batch_size=50, the same used during training
 
 predictions=model.predict(test_iter)
 
