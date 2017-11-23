@@ -7,7 +7,7 @@ import os.path
 import glob
 import logging
 import pickle
-from word_utils import *
+import word_utils
 
 logging.getLogger().setLevel(logging.DEBUG)
 ctx=mx.cpu(0)
@@ -18,7 +18,7 @@ batch_size=50
 dataset_size=1000
 desired_max_len=10 # 0 for unbounded
 
-model_prefix='reverse-string'
+model_prefix='reverse-string-hemingway'
 
 # DATASETS AND ITERATORS GENERATION
 
@@ -33,7 +33,7 @@ if os.path.exists(vocabulary_en_pickled_filename) and os.path.exists(reverse_voc
     vocabulary_en = pickle.load( open( vocabulary_en_pickled_filename, "rb" ) )
     reverse_vocabulary_en = pickle.load( open( reverse_vocabulary_en_pickled_filename, "rb" ) )
 
-    train_set, inverse_train_set, eval_set, inverse_eval_set, _, _, _ = generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
+    train_set, inverse_train_set, eval_set, inverse_eval_set, _, _, _ = word_utils.generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
 
     # ensure sets fit the size
     for i,sentence in enumerate(train_set):
@@ -57,7 +57,7 @@ if os.path.exists(vocabulary_en_pickled_filename) and os.path.exists(reverse_voc
         if len(sentence) < max_string_len:
             inverse_eval_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
 else:
-    train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len, vocabulary_en, reverse_vocabulary_en = generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
+    train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len, vocabulary_en, reverse_vocabulary_en = word_utils.generate_train_eval_sets(desired_dataset_size=dataset_size, max_len=desired_max_len)
 
 vocab_size_train = len(vocabulary_en)
 vocab_size_label = len(reverse_vocabulary_en)
@@ -69,10 +69,10 @@ print("Vocabulary train size:", vocab_size_train)
 print("Vocabulary label size:", vocab_size_label)
 print("Max words in sentence:", max_string_len)
 
-train_iter = generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_string_len, batch_size=batch_size, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
+train_iter = word_utils.generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_string_len, batch_size=batch_size, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 
-eval_iter = generate_OH_iterator(train_set=eval_set, label_set=inverse_eval_set, batch_size=batch_size, max_len=max_string_len, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
+eval_iter = word_utils.generate_OH_iterator(train_set=eval_set, label_set=inverse_eval_set, batch_size=batch_size, max_len=max_string_len, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 # NETWORK DEFINITION
 data = mx.sym.Variable('data')
@@ -136,7 +136,7 @@ model_params=model_prefix+'-'+latest+'.params'
 model_symbols=model_prefix+'-symbol.json'
 
 if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch==latest_epoch:
-    print("Model %s found, loading" % model_params)
+    print("Model %s found, loading" % model_prefix)
     sym, arg_params, aux_params = mx.model.load_checkpoint(model_prefix,latest_epoch)
 
     model.bind(
@@ -151,13 +151,13 @@ if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch=
 else:
     if not os.path.exists(model_params):
         print("File %s not found" % model_params)
-    if not os.path.exists(model_symbols):
+    elif not os.path.exists(model_symbols):
         print("File %s not found" % model_symbols)
-    if max_epoch!=latest_epoch:
+    elif max_epoch!=latest_epoch:
         print("Epoch mismatch")
 
     #resume model
-    print("Model %s not found, trying checkpoint" % model_params)
+    print("Model %s not found, trying checkpoint" % model_prefix)
     
     latest_epoch=0
     for f in glob.glob(model_prefix+'-*.params'):
@@ -188,7 +188,7 @@ else:
         )
     else:
         #start from zero
-        print("No checkpoint found, starting from the beginning")
+        print("No checkpoint found for %s, starting from the beginning" % model_prefix)
 
         model.fit(
             train_data=train_iter,
@@ -226,7 +226,7 @@ import difflib
 
 testset_size=100
 
-test_set, inverse_test_set, _, _, _, _, _ = generate_train_eval_sets(desired_dataset_size=testset_size, max_len=desired_max_len)
+test_set, inverse_test_set, _, _, _, _, _ = word_utils.generate_train_eval_sets(desired_dataset_size=testset_size, max_len=desired_max_len)
 
 for i,sentence in enumerate(test_set):
     if len(sentence) > max_string_len:
@@ -239,7 +239,7 @@ for i,sentence in enumerate(inverse_test_set):
     if len(sentence) < max_string_len:
         inverse_test_set[i] = sentence + [0 for _ in range(max_string_len - len(sentence))]
 
-test_iter = generate_OH_iterator(train_set=test_set, label_set=inverse_test_set, max_len=max_string_len, batch_size=1, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
+test_iter = word_utils.generate_OH_iterator(train_set=test_set, label_set=inverse_test_set, max_len=max_string_len, batch_size=1, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 print("TEST STATS")
 print("Train set size:", len(test_set))
@@ -252,14 +252,14 @@ predictions=model.predict(test_iter)
 
 match_count=0
 for i,pred in enumerate(predictions):
-    matched = ints2text(onehot2int(mx.ndarray.round(predictions[i]))) == ints2text(inverse_test_set[i])
+    matched = word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i]))) == word_utils.ints2text(inverse_test_set[i])
     if matched:
         match_count+=1
     else:
         print(i)
-        inverse=ints2text(inverse_test_set[i])
+        inverse=word_utils.ints2text(inverse_test_set[i])
         print(inverse)
-        inverse_pred=ints2text(onehot2int(mx.ndarray.round(predictions[i])))
+        inverse_pred=word_utils.ints2text(word_utils.onehot2int(mx.ndarray.round(predictions[i])))
         print(inverse_pred)
         print(matched)
         for i,s in enumerate(difflib.ndiff(inverse, inverse_pred)):

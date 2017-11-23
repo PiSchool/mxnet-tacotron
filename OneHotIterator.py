@@ -1,4 +1,5 @@
 import mxnet as mx
+import word_utils
 
 # THIS IS A VERY SIMPLE ITERATOR THAT, TAKEN A LIST OF SENTENCES ENCODED AS INTEGERS, OUTPUTS THE BATCHES IN ONE HOT FORM (TO OVERCOME MEMORY ALLOCATION ISSUES)
 
@@ -61,7 +62,7 @@ class OneHotIterator(mx.io.DataIter):
 
             label = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_label)]
             data = [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_data)]
-            
+
             return mx.io.DataBatch(
                 data,
                 label,

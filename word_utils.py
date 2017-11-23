@@ -24,6 +24,7 @@ def read_content(path, dataset_size=10000):
 def tokenize(content):
     content = content.lower()
     content = re.sub(r'[^\w\s^<>]',' ',content)
+    content = re.sub(r'[0-9]+','<num>',content)
     content = re.sub('http.*? ',' <url> ',content)
     content = re.sub('  ',' ',content)
     return content
@@ -70,7 +71,7 @@ def append_eos_to_list_of_sentences(sentences):
 def ints2text(numbers, reverse_vocabulary):
     return ' '.join([reverse_vocabulary[num] for num in numbers])
 
-def int2onehot(numbers):
+def ints2onehot(numbers, vocab_size):
     return mx.nd.one_hot(mx.nd.array(numbers),vocab_size)
 
 def onehot2int(matrix):
@@ -106,7 +107,6 @@ def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
 
     source_as_ints = [text2ints(sentence, vocabulary_en) for sentence in source_list]
     target_as_ints = [text2ints(sentence, vocabulary_en) for sentence in target_list]
-
 
     if max_len == 0:
         for sentence in source_as_ints:
