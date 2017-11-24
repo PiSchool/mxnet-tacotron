@@ -1,5 +1,4 @@
 import mxnet as mx
-import word_utils
 
 # THIS IS A VERY SIMPLE ITERATOR THAT, TAKEN A LIST OF SENTENCES ENCODED AS INTEGERS, OUTPUTS THE BATCHES IN ONE HOT FORM (TO OVERCOME MEMORY ALLOCATION ISSUES)
 
@@ -72,3 +71,5 @@ class OneHotIterator(mx.io.DataIter):
             )
         else:
             raise StopIteration
+
+import word_utils

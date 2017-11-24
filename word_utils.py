@@ -31,14 +31,53 @@ def tokenize(content):
     content = re.sub('  ',' ',content)
     return content
 
-def content_to_list(path, dataset_size=10000):
+def prune_sentence(sentence, max_len):
+    if max_len >0:
+        words = sentence.split(' ')
+        if (len(words) + 2) >= max_len:
+            sentence = ' '.join(words[:max_len-2])
+    return sentence
+
+def content_to_list(path, dataset_size=10000, slide=False, max_len=0):
     content = tokenize(read_content(path, dataset_size))
     content = re.sub('  ',' ',content)
     content = content.split('\n')
     stripped_content = []
     for sentence in content:
+        if len(stripped_content) >= dataset_size:
+            break
         if len(sentence) > 0:
-            stripped_content.append(sentence.strip(' '))
+            stripped_content.append(prune_sentence(sentence.strip(' '),max_len))
+
+    # if slide is enabled, generate more sentences of constant lenght by "sliding" a window of length max_len over the sentence
+    if slide and max_len>0 and len(stripped_content) < dataset_size:
+        print("Using sentence slider")
+        for sentence in content:
+            if len(stripped_content) >= dataset_size:
+                break
+            if len(sentence) > 0:
+                sentence_as_array = sentence.split(' ')
+                sentence_len = len(sentence_as_array)
+
+                if sentence_len > max_len:
+                    # we can generate sentences with new words
+                    for _ in range(sentence_len - max_len):
+                        if len(sentence_as_array) <= 2:
+                            break # avoid out of bound
+                        sentence_as_array = sentence_as_array[1:]
+                        stripped_content.append((' '.join(sentence_as_array)).strip(' '))
+                        if len(stripped_content) >= dataset_size:
+                            break
+                else:
+                    # we can just generate shorter sentences to reinforce links
+                    for _ in range(sentence_len):
+                        if len(sentence_as_array) <= 2:
+                            break # avoid out of bound
+                        sentence_as_array = sentence_as_array[1:]
+                        stripped_content.append((' '.join(sentence_as_array)).strip(' '))
+                        if len(stripped_content) >= dataset_size:
+                            break
+
     return stripped_content
 
 def build_vocab(corpus_as_list_of_sentences):
@@ -96,21 +135,20 @@ def pad_set(test_set, max_string_len):
     return test_set
 
 def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
-    source_list = content_to_list(path, desired_dataset_size)
-
     if max_len > 0:
-        # prune length of sentences
-        for i,sentence in enumerate(source_list):
-            words = sentence.split(' ')
-            if (len(words) + 2) >= max_len:
-                source_list[i] = ' '.join(words[:max_len-2])
-
-    vocabulary_en, reverse_vocabulary_en = build_vocab(corpus_as_list_of_sentences=source_list)
+        source_list = content_to_list(path, desired_dataset_size, slide=True, max_len=max_len)
+    else:
+        source_list = content_to_list(path, desired_dataset_size)
 
     actual_dataset_size = len(source_list)
 
+    print("Found %d sentences" % actual_dataset_size)
+    vocabulary_en, reverse_vocabulary_en = build_vocab(corpus_as_list_of_sentences=source_list)
+    print("Found %d words" % len(vocabulary_en))
+
+
     target_list = [' '.join(sentence.split(' ')[::-1]) for sentence in source_list]
- 
+
     source_list = append_eos_to_list_of_sentences(prepend_sos_to_list_of_sentences(source_list))
     target_list = append_eos_to_list_of_sentences(prepend_sos_to_list_of_sentences(target_list))
 
@@ -153,7 +191,7 @@ def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
         print(len(row),row)
     exit(0)
     """
-    
+
     eval_indexes = list(set(np.random.randint(0,actual_dataset_size-1, actual_dataset_size//10)))
     train_indexes = np.setdiff1d(np.arange(actual_dataset_size),eval_indexes)
 
@@ -164,7 +202,7 @@ def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
     inverse_train_set = [target_as_ints[i] for i in train_indexes]
 
     return train_set, inverse_train_set, eval_set, inverse_eval_set, max_len, vocabulary_en, reverse_vocabulary_en
-    
+
 def generate_OH_iterator(train_set, label_set, batch_size, max_len, vocab_size_data, vocab_size_label):
     return OneHotIterator(
         data=train_set,
