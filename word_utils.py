@@ -102,18 +102,25 @@ def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
         # prune length of sentences
         for i,sentence in enumerate(source_list):
             words = sentence.split(' ')
-            if len(words) >= max_len:
-                source_list[i] = ' '.join(words[:max_len-1])
+            if (len(words) + 2) >= max_len:
+                source_list[i] = ' '.join(words[:max_len-2])
+
+    vocabulary_en, reverse_vocabulary_en = build_vocab(corpus_as_list_of_sentences=source_list)
 
     actual_dataset_size = len(source_list)
 
-    target_list = [' '.join(sentence.split(' ')[::-1][:-1]) for sentence in source_list]
-
-    vocabulary_en, reverse_vocabulary_en = build_vocab(corpus_as_list_of_sentences=source_list)
+    target_list = [' '.join(sentence.split(' ')[::-1]) for sentence in source_list]
  
-    source_list = append_eos_to_list_of_sentences(source_list)
+    source_list = append_eos_to_list_of_sentences(prepend_sos_to_list_of_sentences(source_list))
     target_list = append_eos_to_list_of_sentences(prepend_sos_to_list_of_sentences(target_list))
 
+    """
+    for row in source_list:
+        print(len(row.split(' ')),row.split(' '))
+    for row in target_list:
+        print(len(row.split(' ')),row.split(' '))
+    exit(0)
+    """
 
     source_as_ints = [text2ints(sentence, vocabulary_en) for sentence in source_list]
     target_as_ints = [text2ints(sentence, vocabulary_en) for sentence in target_list]
@@ -146,7 +153,7 @@ def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
         print(len(row),row)
     exit(0)
     """
-
+    
     eval_indexes = list(set(np.random.randint(0,actual_dataset_size-1, actual_dataset_size//10)))
     train_indexes = np.setdiff1d(np.arange(actual_dataset_size),eval_indexes)
 
