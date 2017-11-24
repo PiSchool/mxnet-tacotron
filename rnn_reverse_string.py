@@ -13,7 +13,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 ctx=mx.gpu(0)
 
 num_hidden=64
-embed_size=64
+embed_size=256
 batch_size=50
 dataset_size=20000
 desired_max_len=10 # 0 for unbounded
@@ -63,9 +63,14 @@ source = mx.sym.Variable('source')
 target = mx.sym.Variable('target')
 label = mx.sym.Variable('softmax_label')
 
-embed = mx.sym.Embedding(
+source_embed = mx.sym.Embedding(
     data=source,
-    input_dim=vocab_size_train, 
+    input_dim=vocab_size_train,
+    output_dim=embed_size
+)
+target_embed = mx.sym.Embedding(
+    data=target,
+    input_dim=vocab_size_label,
     output_dim=embed_size
 )
 
@@ -79,7 +84,7 @@ encoder = mx.rnn.ResidualCell(bi_cell)
         
 _, encoder_state = encoder.unroll(
     length=max_string_len,
-    inputs=embed,
+    inputs=source_embed,
     merge_outputs=False
 )
 
@@ -90,7 +95,7 @@ decoder = mx.rnn.GRUCell(num_hidden=num_hidden*2)
 rnn_output, decoder_state = decoder.unroll(
     length=max_string_len,
     begin_state=encoder_state,
-    inputs=target,
+    inputs=target_embed,
     merge_outputs=True
 )
 
