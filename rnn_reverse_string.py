@@ -15,7 +15,7 @@ ctx=mx.gpu(0)
 num_hidden=64
 embed_size=64
 batch_size=50
-dataset_size=10000
+dataset_size=20000
 desired_max_len=10 # 0 for unbounded
 
 model_prefix='reverse-string-hemingway'

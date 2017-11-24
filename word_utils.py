@@ -32,11 +32,12 @@ def tokenize(content):
     return content
 
 def prune_sentence(sentence, max_len):
+    out = sentence
     if max_len >0:
-        words = sentence.split(' ')
+        words = sentence.strip(' ').split(' ')
         if (len(words) + 2) >= max_len:
-            sentence = ' '.join(words[:max_len-2])
-    return sentence
+            out = (' '.join(words[:max_len-2])).strip(' ')
+    return out
 
 def content_to_list(path, dataset_size=10000, slide=False, max_len=0):
     content = tokenize(read_content(path, dataset_size))
@@ -46,37 +47,36 @@ def content_to_list(path, dataset_size=10000, slide=False, max_len=0):
     for sentence in content:
         if len(stripped_content) >= dataset_size:
             break
-        if len(sentence) > 0:
-            stripped_content.append(prune_sentence(sentence.strip(' '),max_len))
+        pruned_sentence = prune_sentence(sentence,max_len)
+        if len(pruned_sentence) > 0:
+            stripped_content.append(pruned_sentence)
 
     # if slide is enabled, generate more sentences of constant lenght by "sliding" a window of length max_len over the sentence
     if slide and max_len>0 and len(stripped_content) < dataset_size:
         print("Using sentence slider")
         for sentence in content:
-            if len(stripped_content) >= dataset_size:
-                break
             if len(sentence) > 0:
                 sentence_as_array = sentence.split(' ')
                 sentence_len = len(sentence_as_array)
 
                 if sentence_len > max_len:
                     # we can generate sentences with new words
-                    for _ in range(sentence_len - max_len):
-                        if len(sentence_as_array) <= 2:
-                            break # avoid out of bound
-                        sentence_as_array = sentence_as_array[1:]
-                        stripped_content.append((' '.join(sentence_as_array)).strip(' '))
-                        if len(stripped_content) >= dataset_size:
-                            break
+                    diff = sentence_len - max_len +2
                 else:
                     # we can just generate shorter sentences to reinforce links
-                    for _ in range(sentence_len):
-                        if len(sentence_as_array) <= 2:
-                            break # avoid out of bound
-                        sentence_as_array = sentence_as_array[1:]
-                        stripped_content.append((' '.join(sentence_as_array)).strip(' '))
-                        if len(stripped_content) >= dataset_size:
-                            break
+                    diff = sentence_len
+
+                for _ in range(diff):
+                    if len(sentence_as_array) <= 2:
+                        break # avoid out of bound
+                    pruned_sentence = prune_sentence((' '.join(sentence_as_array)).strip(' '),max_len)
+                    if len(pruned_sentence) > 0:
+                        stripped_content.append(pruned_sentence)
+                    if len(stripped_content) >= dataset_size:
+                        break
+                    sentence_as_array = sentence_as_array[1:]
+            if len(stripped_content) >= dataset_size:
+                break
 
     return stripped_content
 
@@ -142,9 +142,7 @@ def generate_train_eval_sets(desired_dataset_size, path='english', max_len=0):
 
     actual_dataset_size = len(source_list)
 
-    print("Found %d sentences" % actual_dataset_size)
     vocabulary_en, reverse_vocabulary_en = build_vocab(corpus_as_list_of_sentences=source_list)
-    print("Found %d words" % len(vocabulary_en))
 
 
     target_list = [' '.join(sentence.split(' ')[::-1]) for sentence in source_list]

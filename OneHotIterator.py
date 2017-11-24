@@ -61,7 +61,7 @@ class OneHotIterator(mx.io.DataIter):
 
             label = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_label)]
             data = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_data)] + \
-                [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_data)]
+                [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_label)]
 
             return mx.io.DataBatch(
                 data,

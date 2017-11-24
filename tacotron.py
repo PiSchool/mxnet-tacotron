@@ -10,7 +10,7 @@ from __future__ import print_function
 import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd
-ctx= mx.cpu()
+ctx= mx.gpu(0)
 import csv
 import codecs
 import re

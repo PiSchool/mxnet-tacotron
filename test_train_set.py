@@ -2,6 +2,7 @@
 
 # THIS DEMONSTRATES THE CUSTOM ITERATOR WORKS AND EXTRACTS GOOD ONE HOT SAMPLES OF THE FILE PROVIDED
 
+from __future__ import print_function
 import mxnet as mx
 ctx=mx.cpu(0)
 import logging
@@ -18,7 +19,7 @@ train_set = word_utils.pad_set(train_set, max_string_len)
 vocab_size_train = len(vocabulary_en)
 vocab_size_label = len(reverse_vocabulary_en)
 
-train_iter = word_utils.generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_string_len, batch_size=1, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
+train_iter = word_utils.generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_string_len, batch_size=100, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 
 print("\nSTATS\n-----")
@@ -29,7 +30,7 @@ print("Vocabulary train size:", vocab_size_train)
 print("Vocabulary label size:", vocab_size_label)
 print("Desired max words in sentence:", (max_len if max_len > 0 else "unbounded"))
 print("Actual max words in sentence:", max_string_len)
-exit(0)
+#exit(0)
 
 try:
     while True:
@@ -37,11 +38,11 @@ try:
         print(item)
         print(item.provide_data)
         #print([word_utils.onehot2int(sample) for sample in item.data])
-        print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[0]])
-        print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[1]])
+        #print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[0]])
+        #print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[1]])
         print()
         print(item.provide_label)
-        #print(item.label)
+        print(item.label)
         #print([sample for sample in item.label])
         #print([word_utils.onehot2int(sample) for sample in item.label])
         #print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.label])
