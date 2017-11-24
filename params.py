@@ -13,7 +13,7 @@ class Hyperparams:
     # signal processing
     sr = 8000 # Sampling rate. Paper => 24000
     n_fft = 2048 # fft points (samples)
-    frame_shift = 0.0125 # seconds
+    frame_shift = 0.025 # seconds
     frame_length = 0.05 # seconds
     hop_length = int(sr*frame_shift) # samples  This is dependent on the frame_shift.
     win_length = int(sr*frame_length) # samples This is dependent on the frame_length.
@@ -38,8 +38,8 @@ class Hyperparams:
     lr = 0.0005 # Paper => Exponential decay
     logdir = "logdir" if not sanity_check else "logdir_s"
     outputdir = 'samples' if not sanity_check else "samples_s"
-    batch_size = 32
-    num_epochs = 10000 if not sanity_check else 40 # Paper => 2M global steps!
+    batch_size = 2#32
+    num_epochs = 100#10000 if not sanity_check else 40 # Paper => 2M global steps!
     loss_type = "l2" # Or you can test "l2"
     num_samples = 32
 
