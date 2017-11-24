@@ -10,7 +10,7 @@ from __future__ import print_function
 import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd
-ctx= mx.gpu(0)
+ctx= mx.cpu()
 import csv
 import codecs
 import re
@@ -18,7 +18,10 @@ import audio_process
 import traceback
 import subprocess
 import math
+import logging
 from params import Hyperparams as hp 
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 # <h3> DATA SETUP </h3>
@@ -48,7 +51,7 @@ from params import Hyperparams as hp
 num_hidden = hp.embed_size
 reduction_factor=hp.r
 emb_size=hp.embed_size
-batch_size=2
+batch_size=hp.batch_size
 
 
 # In[3]:
@@ -94,7 +97,8 @@ def generate_text_spectra(texts_list, sound_labels):
     assert len(sound_labels) == len(texts_list)
     
     print("Generating spectrograms")
-    
+    print("Sample length for windowing:",hp.win_length)
+    print("Sample length for hop:",hp.hop_length,"\n")
     #tuples of wav and sr of that wav. wav is a 1D floats vector
     wavs_srs = [audio_process.load_wave(sound_clip) for sound_clip in sound_labels]
     longest_wav_sr = (max(wavs_srs, key= lambda wav: len(wav[0])))
@@ -105,6 +109,7 @@ def generate_text_spectra(texts_list, sound_labels):
     #prepare the data structure for save all the spectra
     spectra_lin = mx.ndarray.zeros((len(sound_labels),math.ceil(max_samples_length/hp.hop_length),1+(hp.n_fft//2)))
     spectra_mel = mx.ndarray.zeros((len(sound_labels),math.ceil(max_samples_length/hp.hop_length),hp.n_mels))
+    mel_basis = audio_process.get_mel_basis()
     print("Padding audio and compute mel and lin spectra..")
     for indx,wav_sr in enumerate(wavs_srs):
         wav = wav_sr[0]
@@ -114,7 +119,7 @@ def generate_text_spectra(texts_list, sound_labels):
 #         print("num of zeros to add",diff)
         padded = np.append(wav,np.zeros(diff))
         # get the spectrum from the padded sound
-        spectrum_lin, spectrum_mel=(audio_process.do_spectrogram(y=padded,sr=hp.sr))
+        spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
 #         print(padded_spectrum_lin.shape)
         # save into the ndarray
         spectra_lin[indx,:,:]=np.transpose(spectrum_lin[:,:])
@@ -210,7 +215,7 @@ def get_iterators(data='../train_data/dataset.csv'):
 #         print(batch.data[0].asnumpy())
 #         print(batch.data[0].shape)
     
-    return traindata_iterator,evaldata_iterator, train_data.shape[1]
+    return traindata_iterator,evaldata_iterator, train_data.shape[1],eval_data,eval_label
 
 
 
@@ -245,13 +250,21 @@ def prenet_pass(data):
 def conv1dBank(conv_input, K):
     #The k-th filter got a kernel width of k, with 0<k<=K 
     conv=mx.sym.Convolution(data=conv_input, kernel=(1,), num_filter=hp.embed_size//2,name="convBank_1",layout='NCW')
-    (conv, mean, var) = mx.sym.BatchNorm(data=conv, output_mean_var=True)
+    '''
+    BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
+    '''
+    #(conv, mean, var) = mx.sym.BatchNorm(data=conv, output_mean_var=True)
     conv = mx.sym.Activation(data=conv, act_type='relu')
 
     for k in range(2, K+1):
         in_i = mx.sym.concat(conv_input,mx.sym.zeros((batch_size,hp.embed_size//2,k-1)),dim=2)
         convi = mx.sym.Convolution(data=in_i, kernel=(k,), num_filter=hp.embed_size//2,layout='NCW',name="convBank_"+str(k))
-        (convi, mean, var) = mx.sym.BatchNorm(data=convi, output_mean_var=True)
+        
+        '''
+        BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
+        '''
+        #(convi, mean, var) = mx.sym.BatchNorm(data=convi, output_mean_var=True)
+        
         convi = mx.sym.Activation(data=convi, act_type='relu')
         conv = mx.symbol.concat(conv,convi,dim=1)    
     return conv
@@ -292,12 +305,21 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
     #Now two other projections (convolutions) are done. Same padding thing
     poold_bank_padded = mx.sym.concat(poold_bank,mx.sym.zeros((batch_size,K*(hp.embed_size//2),2)),dim=2)
     proj1 = mx.sym.Convolution(data=poold_bank_padded, kernel=(3,), num_filter=proj1_size, name='CBHG_conv1',layout='NCW')
-    (proj1, proj1_mean, proj1_var) = mx.sym.BatchNorm(data=proj1, output_mean_var=True, name='CBHG_batch1')
+    
+    '''
+    BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
+    '''
+    #(proj1, proj1_mean, proj1_var) = mx.sym.BatchNorm(data=proj1, output_mean_var=True, name='CBHG_batch1')
+    
     proj1 = mx.sym.Activation(data=proj1, act_type='relu', name='CBHG_act1')
 
     proj1_padded = mx.sym.concat(proj1,mx.sym.zeros((batch_size,hp.embed_size,2)),dim=2)
     proj2 = mx.sym.Convolution(proj1_padded, kernel=(3,), num_filter=proj2_size, name='CBHG_conv2',layout='NCW')
-    (proj2, proj2_mean, proj2_var) = mx.sym.BatchNorm(data=proj2, output_mean_var=True, name='CBHG_batch2')
+    
+    '''
+    BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
+    '''
+    #(proj2, proj2_mean, proj2_var) = mx.sym.BatchNorm(data=proj2, output_mean_var=True, name='CBHG_batch2')
 
     #Adding residual connection. The output of the prenet pass is added to proj2
     residual= proj2 + data
@@ -378,18 +400,17 @@ def postprocess(input_mel_spectgrograms,max_audio_length):
 # In[12]:
 
 
-traindata_iterator, evaldata_iterator, max_audio_length = get_iterators(data=hp.text_file)
+traindata_iterator, evaldata_iterator, max_audio_length,eval_data,eval_label = get_iterators(data=hp.text_file)
 linear_spectrogram = mx.sym.Variable('linear_spectrogram')
 mel_spectrogram = mx.sym.Variable('mel_spectrogram')
 print("max_audio_length: ",max_audio_length)
 
 
-# In[13]:
-
-
+# In[19]:
 
 
 net = mx.sym.MAERegressionOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)
+#net = mx.sym.SoftmaxOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)
 model = mx.mod.Module(symbol=net,
                       context=ctx,
                       data_names=['mel_spectrogram'],
@@ -397,17 +418,21 @@ model = mx.mod.Module(symbol=net,
                      )
 
 
-# In[14]:
+# In[20]:
 
 
 
-model.fit(traindata_iterator,
-          eval_data=evaldata_iterator,
-          optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
-          optimizer_params={'learning_rate': 0.1, 'momentum': 0.9},
-          eval_metric='acc',
-          batch_end_callback = mx.callback.Speedometer(batch_size, 10),
-          num_epoch=8)
+
+model.fit(
+        traindata_iterator,
+        eval_data=evaldata_iterator,
+        optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
+        optimizer_params={'learning_rate': 0.0001, 'momentum': 0.9},
+        #eval_metric='acc',
+        batch_end_callback = mx.callback.Speedometer(batch_size, 10),
+        #epoch_end_callback = mx.callback.do_checkpoint('CBHG'),
+        num_epoch=hp.num_epochs
+)
 
 
-
+# # 
