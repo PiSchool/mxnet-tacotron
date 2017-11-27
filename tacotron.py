@@ -3,7 +3,6 @@
 
 # <h1>TACOTRON</h1>
 
-# In[1]:
 
 
 from __future__ import print_function
@@ -16,7 +15,7 @@ import codecs
 import re
 import audio_process
 import traceback
-import subprocess
+from os.path import expanduser
 import math
 import logging
 from params import Hyperparams as hp 
@@ -45,7 +44,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 # <br/>
 # more info at: https://github.com/Kyubyong/tacotron/blob/master/utils.py#L58
 
-# In[2]:
 
 
 num_hidden = hp.embed_size
@@ -54,7 +52,6 @@ emb_size=hp.embed_size
 batch_size=hp.batch_size
 
 
-# In[3]:
 
 
 def generate_vocabulary(texts_list):    
@@ -164,7 +161,6 @@ def generate_text_spectra(texts_list, sound_labels):
     return texts_one_hot, spectra_lin, spectra_mel
 
 
-# In[4]:
 
 
 def get_iterators(data='../train_data/dataset.csv'):
@@ -210,7 +206,6 @@ def get_iterators(data='../train_data/dataset.csv'):
         print(e)
         traceback.print_exc()
 
-
 #     for batch in traindata_iterator:
 #         print(batch.data[0].asnumpy())
 #         print(batch.data[0].shape)
@@ -223,7 +218,6 @@ def get_iterators(data='../train_data/dataset.csv'):
 
 # <h4> Prenet </h4>
 
-# In[5]:
 
 
 """
@@ -243,17 +237,23 @@ def prenet_pass(data):
 
 # <h4> Convolution 1D Bank </h4>
 
-# In[6]:
+# In[23]:
 
 
 # Convolution bank of K filter
-def conv1dBank(conv_input, K):
+def conv1dBank(conv_input, K): # 1,88,128 # N C W -> 1 80 88
+    #(32,88,128)
+    #N C W (num_batch, channel, width)
+    
     #The k-th filter got a kernel width of k, with 0<k<=K 
     conv=mx.sym.Convolution(data=conv_input, kernel=(1,), num_filter=hp.embed_size//2,name="convBank_1",layout='NCW')
+    #(32,128,128) ==> (32,K*128,128)
+    #(32,num_filter,out_width)
     '''
     BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
     '''
     #(conv, mean, var) = mx.sym.BatchNorm(data=conv, output_mean_var=True)
+    conv = mx.sym.BatchNorm(data=conv, name="batchN_bank_1")
     conv = mx.sym.Activation(data=conv, act_type='relu')
 
     for k in range(2, K+1):
@@ -264,15 +264,16 @@ def conv1dBank(conv_input, K):
         BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
         '''
         #(convi, mean, var) = mx.sym.BatchNorm(data=convi, output_mean_var=True)
-        
+        convi = mx.sym.BatchNorm(data=convi, name="batchN_bank_"+str(i))
         convi = mx.sym.Activation(data=convi, act_type='relu')
-        conv = mx.symbol.concat(conv,convi,dim=1)    
+        conv = mx.symbol.concat(conv,convi,dim=1)   
+    
     return conv
 
 
 # <h4> Highway </h4>
 
-# In[7]:
+# In[24]:
 
 
 # highway
@@ -290,7 +291,7 @@ def highway_layer(data,i=0):
 
 # <h4> CBHG </h4>
 
-# In[8]:
+# In[25]:
 
 
 # CBHG
@@ -301,7 +302,7 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
     #Again here. To obtain always the same dimension I'm padding the input of each operation
     conv_padded = mx.sym.concat(bank,mx.sym.zeros((batch_size,K*(hp.embed_size//2),1)),dim=2)
     poold_bank = mx.sym.Pooling(data=conv_padded, pool_type='max', kernel=(2,), stride=(1,), name="CBHG_pool")
-
+    #(32,1024,127)
     #Now two other projections (convolutions) are done. Same padding thing
     poold_bank_padded = mx.sym.concat(poold_bank,mx.sym.zeros((batch_size,K*(hp.embed_size//2),2)),dim=2)
     proj1 = mx.sym.Convolution(data=poold_bank_padded, kernel=(3,), num_filter=proj1_size, name='CBHG_conv1',layout='NCW')
@@ -345,7 +346,7 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
 
 # <h4> Encoder </h4>
 
-# In[9]:
+# In[26]:
 
 
 # encoder
@@ -357,7 +358,7 @@ def encoder(data):
 
 # <h4> Decoder (stub)</h4>
 
-# In[10]:
+# In[27]:
 
 
 # decoder
@@ -384,12 +385,12 @@ def decoder(input_spectrogram,context,reduction_factor):
     return predicted_frames, states
 
 
-# In[11]:
+# In[28]:
 
 
 def postprocess(input_mel_spectgrograms,max_audio_length):
-    in_cbhg = prenet_pass(input_mel_spectgrograms)
-    in_cbhg_sw= mx.sym.swapaxes(in_cbhg,1,2)
+    in_cbhg = prenet_pass(input_mel_spectgrograms) # batch_size,time_frames,hidden_layer : 1,88,128
+    in_cbhg_sw= mx.sym.swapaxes(in_cbhg,1,2) #batch_size,num_filter_channl,output_width Conv1d
     
     bi_gru_out =CBHG(in_cbhg_sw,8,hp.embed_size,hp.embed_size//2,max_audio_length)
     
@@ -397,16 +398,16 @@ def postprocess(input_mel_spectgrograms,max_audio_length):
     return linear_scale_spectrograms
 
 
-# In[12]:
+# In[29]:
 
 
 traindata_iterator, evaldata_iterator, max_audio_length,eval_data,eval_label = get_iterators(data=hp.text_file)
 linear_spectrogram = mx.sym.Variable('linear_spectrogram')
 mel_spectrogram = mx.sym.Variable('mel_spectrogram')
 print("max_audio_length: ",max_audio_length)
+print("batch_size: ",batch_size)
 
 
-# In[19]:
 
 
 net = mx.sym.MAERegressionOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)
@@ -418,9 +419,7 @@ model = mx.mod.Module(symbol=net,
                      )
 
 
-# In[20]:
-
-
+# In[32]:
 
 
 model.fit(
@@ -428,11 +427,9 @@ model.fit(
         eval_data=evaldata_iterator,
         optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
         optimizer_params={'learning_rate': 0.0001, 'momentum': 0.9},
-        #eval_metric='acc',
+        eval_metric='mae',
         batch_end_callback = mx.callback.Speedometer(batch_size, 10),
-        #epoch_end_callback = mx.callback.do_checkpoint('CBHG'),
+        epoch_end_callback = mx.callback.do_checkpoint(expanduser("~")+"/mxnet/CBHG_model/cbhg_step"),
         num_epoch=hp.num_epochs
 )
 
-
-# # 
