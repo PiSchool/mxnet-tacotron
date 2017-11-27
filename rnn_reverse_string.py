@@ -10,15 +10,18 @@ import pickle
 import word_utils
 
 logging.getLogger().setLevel(logging.DEBUG)
-ctx=mx.gpu(0)
+GPU_COUNT = 1 # increase if you have more
+ctx = [mx.gpu(i) for i in range(GPU_COUNT)]
 
 num_hidden=64
-embed_size=64
-batch_size=50
-dataset_size=10000
-desired_max_len=10 # 0 for unbounded
+embed_size=256
+dataset_size=5000
+batch_size = 100
+desired_max_len = 5 # 0 for unbounded
 
 model_prefix='reverse-string-hemingway'
+save = False
+just_print_graph = False
 
 # DATASETS AND ITERATORS GENERATION
 
@@ -28,7 +31,7 @@ vocabulary_en_pickled_filename = model_prefix+"-vocabulary_en.pickled"
 reverse_vocabulary_en_pickled_filename = model_prefix+"-reverse_vocabulary_en.pickled"
 max_string_len_pickled_filename = model_prefix+"-max_string_len.pickled"
 
-if os.path.exists(vocabulary_en_pickled_filename) and os.path.exists(reverse_vocabulary_en_pickled_filename) and os.path.exists(max_string_len_pickled_filename):
+if os.path.exists(vocabulary_en_pickled_filename) and os.path.exists(reverse_vocabulary_en_pickled_filename) and os.path.exists(max_string_len_pickled_filename) and save:
     max_string_len = pickle.load( open( max_string_len_pickled_filename, "rb" ) )
     vocabulary_en = pickle.load( open( vocabulary_en_pickled_filename, "rb" ) )
     reverse_vocabulary_en = pickle.load( open( reverse_vocabulary_en_pickled_filename, "rb" ) )
@@ -59,12 +62,18 @@ train_iter = word_utils.generate_OH_iterator(train_set=train_set, label_set=inve
 eval_iter = word_utils.generate_OH_iterator(train_set=eval_set, label_set=inverse_eval_set, batch_size=batch_size, max_len=max_string_len, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 # NETWORK DEFINITION
-data = mx.sym.Variable('data')
+source = mx.sym.Variable('source')
+target = mx.sym.Variable('target')
 label = mx.sym.Variable('softmax_label')
 
-embed = mx.sym.Embedding(
-    data=data,
-    input_dim=vocab_size_train, 
+source_embed = mx.sym.Embedding(
+    data=source,
+    input_dim=vocab_size_train,
+    output_dim=embed_size
+)
+target_embed = mx.sym.Embedding(
+    data=target,
+    input_dim=vocab_size_label,
     output_dim=embed_size
 )
 
@@ -74,11 +83,11 @@ bi_cell = mx.rnn.BidirectionalCell(
     output_prefix="bi_"
 )
 
-encoder = mx.rnn.ResidualCell(bi_cell)
+encoder = (bi_cell)
         
 _, encoder_state = encoder.unroll(
     length=max_string_len,
-    inputs=embed,
+    inputs=source_embed,
     merge_outputs=False
 )
 
@@ -86,9 +95,10 @@ encoder_state = mx.sym.concat(encoder_state[0][0],encoder_state[1][0])
 
 decoder = mx.rnn.GRUCell(num_hidden=num_hidden*2)
 
-rnn_output, decoder_state = decoder.unroll(
-    length=num_hidden*2,
-    inputs=encoder_state,
+rnn_output, _ = decoder.unroll(
+    length=max_string_len,
+    begin_state=encoder_state,
+    inputs=target_embed,
     merge_outputs=True
 )
 
@@ -106,10 +116,19 @@ out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
 net = mx.sym.LinearRegressionOutput(data=out, label=label)
 
 # FIT THE MODEL
-model = mx.module.Module(net, context=ctx)
+model = mx.module.Module(net, data_names=['source','target'], context=ctx)
+
+if just_print_graph:
+    graph=mx.viz.plot_network(
+        net,
+        save_format='pdf',
+        title='rnn'
+    )
+    graph.render()
+    exit(0)
 
 
-max_epoch=8
+max_epoch=3
 
 latest_epoch=0 # dummy, don't change
 
@@ -121,7 +140,12 @@ latest=str(latest_epoch).zfill(4)
 model_params=model_prefix+'-'+latest+'.params'
 model_symbols=model_prefix+'-symbol.json'
 
-if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch==latest_epoch:
+if save:
+    epoch_end_callback = mx.callback.do_checkpoint(model_prefix)
+else:
+    epoch_end_callback = None
+
+if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch==latest_epoch and save:
     print("Model %s found, loading" % model_prefix)
     sym, arg_params, aux_params = mx.model.load_checkpoint(model_prefix,latest_epoch)
 
@@ -135,23 +159,24 @@ if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch=
     print("Model loaded")
 
 else:
-    if not os.path.exists(model_params):
-        print("File %s not found" % model_params)
-    elif not os.path.exists(model_symbols):
-        print("File %s not found" % model_symbols)
-    elif max_epoch!=latest_epoch:
-        print("Epoch mismatch")
+    if save:
+        if not os.path.exists(model_params):
+            print("File %s not found" % model_params)
+        elif not os.path.exists(model_symbols):
+            print("File %s not found" % model_symbols)
+        elif max_epoch!=latest_epoch:
+            print("Epoch mismatch")
 
-    #resume model
-    print("Model %s not found, trying checkpoint" % model_prefix)
-    
+        #resume model
+        print("Model %s not found, trying checkpoint" % model_prefix)
+
     latest_epoch=0
     for f in glob.glob(model_prefix+'-*.params'):
         latest_epoch=max(latest_epoch,int(f.split(model_prefix)[1].split('-')[1].split('.')[0]))
     latest=str(latest_epoch).zfill(4)
     latest_checkpoint=model_prefix+'-'+latest+'.params'
 
-    if os.path.exists(latest_checkpoint):
+    if os.path.exists(latest_checkpoint) and save:
         
         print("Checkpoint %s found, loading" % latest_checkpoint)
 
@@ -163,10 +188,10 @@ else:
             train_iter,
             eval_data=eval_iter,
             eval_metric='acc',
-            optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
+            optimizer='sgd', optimizer_params={'learning_rate':0.01, 'momentum':0.9},
             initializer=mx.initializer.Xavier(),
             batch_end_callback = mx.callback.Speedometer(batch_size, 10),
-            epoch_end_callback = mx.callback.do_checkpoint(model_prefix),
+            epoch_end_callback = epoch_end_callback,
             arg_params=arg_params,
             aux_params=aux_params,
             begin_epoch=latest_epoch,
@@ -174,38 +199,42 @@ else:
         )
     else:
         #start from zero
-        print("No checkpoint found for %s, starting from the beginning" % model_prefix)
+        if save:
+            print("No checkpoint found for %s, starting from the beginning" % model_prefix)
+        else:
+            print("Starting from scratch")
 
         model.fit(
             train_data=train_iter,
             eval_data=eval_iter,
             eval_metric = 'acc',
-            optimizer=mx.optimizer.Adam(rescale_grad=1/batch_size),
+            optimizer='sgd', optimizer_params={'learning_rate':0.01, 'momentum':0.9},
             initializer=mx.initializer.Xavier(),
-            batch_end_callback=mx.callback.Speedometer(batch_size, 10),
-            epoch_end_callback = mx.callback.do_checkpoint(model_prefix),
+            batch_end_callback = mx.callback.Speedometer(batch_size, 10),
+            epoch_end_callback = epoch_end_callback,
             num_epoch=max_epoch
         )
 
     print("Cleaning up")
-    for f in glob.glob(model_prefix+'-*.params'):
-            os.remove(f)  
+    for f in glob.glob(model_prefix+'-*'):
+            os.remove(f)
 
-    latest=str(max_epoch).zfill(4)
-    model_params=model_prefix+'-'+latest+'.params'
+    if save:
+        latest=str(max_epoch).zfill(4)
+        model_params=model_prefix+'-'+latest+'.params'
 
-    print("Saving model %s" % model_params)
-    model.save_params(model_params)
-    print("Model saved")
+        print("Saving model %s" % model_params)
+        model.save_params(model_params)
+        print("Model saved")
 
-    print("Saving vocabulary")
-    pickle.dump(vocabulary_en, open(vocabulary_en_pickled_filename, "wb" ))
-    pickle.dump(reverse_vocabulary_en, open(reverse_vocabulary_en_pickled_filename, "wb" ))
-    print("Vocabulary saved")
+        print("Saving vocabulary")
+        pickle.dump(vocabulary_en, open(vocabulary_en_pickled_filename, "wb" ))
+        pickle.dump(reverse_vocabulary_en, open(reverse_vocabulary_en_pickled_filename, "wb" ))
+        print("Vocabulary saved")
 
-    print("Saving max_string_len")
-    pickle.dump(max_string_len, open(max_string_len_pickled_filename, "wb" ))
-    print("max_string_len saved")
+        print("Saving max_string_len")
+        pickle.dump(max_string_len, open(max_string_len_pickled_filename, "wb" ))
+        print("max_string_len saved")
 
 # TEST WITH UNSEEN DATA (IN THIS CASE IS EVEN SEEN DATA DUE TO THE LOUSY WAY I GENERATE A TEST SET, BUT IT DOESN'T MATER SINCE IT DOESN'T PREDICT ANYTHING)
 

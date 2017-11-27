@@ -3,15 +3,13 @@
 
 # <h1>TACOTRON</h1>
 
-# In[18]:
 
 
 from __future__ import print_function
 import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd
-from IPython.display import clear_output
-ctx= mx.gpu()
+ctx= mx.gpu(0)
 import csv
 import codecs
 import re
@@ -21,7 +19,6 @@ from os.path import expanduser
 import math
 import logging
 from params import Hyperparams as hp 
-import IPython.display
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -47,7 +44,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 # <br/>
 # more info at: https://github.com/Kyubyong/tacotron/blob/master/utils.py#L58
 
-# In[19]:
 
 
 num_hidden = hp.embed_size
@@ -56,7 +52,6 @@ emb_size=hp.embed_size
 batch_size=hp.batch_size
 
 
-# In[20]:
 
 
 def generate_vocabulary(texts_list):    
@@ -166,7 +161,6 @@ def generate_text_spectra(texts_list, sound_labels):
     return texts_one_hot, spectra_lin, spectra_mel
 
 
-# In[21]:
 
 
 def get_iterators(data='../train_data/dataset.csv'):
@@ -212,7 +206,6 @@ def get_iterators(data='../train_data/dataset.csv'):
         print(e)
         traceback.print_exc()
 
-    
 #     for batch in traindata_iterator:
 #         print(batch.data[0].asnumpy())
 #         print(batch.data[0].shape)
@@ -225,7 +218,6 @@ def get_iterators(data='../train_data/dataset.csv'):
 
 # <h4> Prenet </h4>
 
-# In[22]:
 
 
 """
@@ -416,18 +408,6 @@ print("max_audio_length: ",max_audio_length)
 print("batch_size: ",batch_size)
 
 
-# In[30]:
-
-
-#check if data are ok
-evaldata_iterator.reset()
-for i in range(len(eval_label)):
-    eval_label_it = evaldata_iterator.next().label
-    print("linear it:",eval_label_it[0][0][max_audio_length-1][0:5])
-    print("linear:",eval_label[i][max_audio_length-1][0:5])
-
-
-# In[31]:
 
 
 net = mx.sym.MAERegressionOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)

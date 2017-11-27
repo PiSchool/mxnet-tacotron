@@ -1,5 +1,4 @@
 import mxnet as mx
-import word_utils
 
 # THIS IS A VERY SIMPLE ITERATOR THAT, TAKEN A LIST OF SENTENCES ENCODED AS INTEGERS, OUTPUTS THE BATCHES IN ONE HOT FORM (TO OVERCOME MEMORY ALLOCATION ISSUES)
 
@@ -11,9 +10,9 @@ class OneHotIterator(mx.io.DataIter):
                  batch_size=10):
         self._provide_data = [
             mx.io.DataDesc(
-                name=data_names,
+                name=data_name,
                 shape=(batch_size, max_len_data, vocab_size_data),
-                layout='NTC')
+                layout='NTC') for data_name in data_names
         ]
         self._provide_label = [
             mx.io.DataDesc(
@@ -23,7 +22,7 @@ class OneHotIterator(mx.io.DataIter):
         ]
         self.num_batches = len(data)//batch_size
         self.batch_size = batch_size
-        self.cur_data_pointer = 0
+        self.cur_pointer = 0
         self.cur_batch = 0
         self.vocab_size_data = vocab_size_data
         self.vocab_size_label = vocab_size_label
@@ -35,7 +34,7 @@ class OneHotIterator(mx.io.DataIter):
 
     def reset(self):
         self.cur_batch = 0
-        self.cur_data_pointer = 0
+        self.cur_pointer = 0
 
     def __next__(self):
         return self.next()
@@ -56,12 +55,13 @@ class OneHotIterator(mx.io.DataIter):
             label_batch = []
 
             for i in range(self.batch_size):
-                data_batch.append(self.data[self.cur_data_pointer])
-                label_batch.append(self.label[self.cur_data_pointer])
-                self.cur_data_pointer+=1
+                data_batch.append(self.data[self.cur_pointer])
+                label_batch.append(self.label[self.cur_pointer])
+                self.cur_pointer+=1
 
-            label = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_label)]
-            data = [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_data)]
+            label = [mx.nd.one_hot(mx.nd.array(label_batch), self.vocab_size_label)]
+
+            data = [mx.nd.one_hot(mx.nd.array(data_batch), self.vocab_size_data)] + label
 
             return mx.io.DataBatch(
                 data,
@@ -72,3 +72,5 @@ class OneHotIterator(mx.io.DataIter):
             )
         else:
             raise StopIteration
+
+import word_utils
