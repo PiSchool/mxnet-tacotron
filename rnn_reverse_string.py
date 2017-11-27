@@ -16,10 +16,11 @@ num_hidden=128
 embed_size=256
 dataset_size=20000
 batch_size = 100
-desired_max_len=10 # 0 for unbounded
+desired_max_len = 5 # 0 for unbounded
 
 model_prefix='reverse-string-hemingway'
 save = False
+just_print_graph = False
 
 # DATASETS AND ITERATORS GENERATION
 
@@ -93,7 +94,7 @@ encoder_state = mx.sym.concat(encoder_state[0][0],encoder_state[1][0])
 
 decoder = mx.rnn.GRUCell(num_hidden=num_hidden*2)
 
-rnn_output, decoder_state = decoder.unroll(
+rnn_output, _ = decoder.unroll(
     length=max_string_len,
     begin_state=encoder_state,
     inputs=target_embed,
@@ -111,10 +112,19 @@ act=mx.sym.Activation(data=fc, act_type='relu')
 
 out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
 
-net = mx.sym.LinearRegressionOutput(data=out, label=label)
+net = mx.sym.softmax_cross_entropy(data=out, label=label)
 
 # FIT THE MODEL
 model = mx.module.Module(net, data_names=['source','target'], context=ctx)
+
+if just_print_graph:
+    graph=mx.viz.plot_network(
+        net,
+        save_format='pdf',
+        title='rnn'
+    )
+    graph.render()
+    exit(0)
 
 
 max_epoch=8
