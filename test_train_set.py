@@ -9,8 +9,8 @@ import logging
 logging.getLogger().setLevel(logging.DEBUG)
 import word_utils
 
-desired_dataset_size=20000
-max_len=10
+desired_dataset_size=200
+max_len=7
 
 train_set, inverse_train_set, eval_set, inverse_eval_set, max_string_len, vocabulary_en, reverse_vocabulary_en = word_utils.generate_train_eval_sets(desired_dataset_size=desired_dataset_size, max_len=max_len)
 
@@ -19,7 +19,7 @@ train_set = word_utils.pad_set(train_set, max_string_len)
 vocab_size_train = len(vocabulary_en)
 vocab_size_label = len(reverse_vocabulary_en)
 
-train_iter = word_utils.generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_string_len, batch_size=100, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
+train_iter = word_utils.generate_OH_iterator(train_set=train_set, label_set=inverse_train_set, max_len=max_string_len, batch_size=10, vocab_size_data=vocab_size_train, vocab_size_label=vocab_size_label)
 
 
 print("\nSTATS\n-----")
@@ -34,19 +34,16 @@ print("Actual max words in sentence:", max_string_len)
 
 try:
     while True:
-        item= train_iter.next()
+        item = train_iter.next()
         print(item)
+        print()
         print(item.provide_data)
-        #print([word_utils.onehot2int(sample) for sample in item.data])
-        #print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[0]])
-        #print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[1]])
+        print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[0]])
+        print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.data[1]])
         print()
         print(item.provide_label)
-        print(item.label)
-        #print([sample for sample in item.label])
-        #print([word_utils.onehot2int(sample) for sample in item.label])
-        #print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.label])
+        print([word_utils.ints2text(word_utils.onehot2int(sample),reverse_vocabulary_en) for sample in item.label[0]])
         print()
-        print()
+        print("------------------------------------------------------------------")
 except StopIteration:
     print("end of iteration")

@@ -10,11 +10,12 @@ import pickle
 import word_utils
 
 logging.getLogger().setLevel(logging.DEBUG)
-ctx=mx.gpu(0)
+GPU_COUNT = 1 # increase if you have more
+ctx = [mx.gpu(i) for i in range(GPU_COUNT)]
 
-num_hidden=128
+num_hidden=64
 embed_size=256
-dataset_size=20000
+dataset_size=5000
 batch_size = 100
 desired_max_len = 5 # 0 for unbounded
 
@@ -112,7 +113,7 @@ act=mx.sym.Activation(data=fc, act_type='relu')
 
 out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
 
-net = mx.sym.softmax_cross_entropy(data=out, label=label)
+net = mx.sym.LinearRegressionOutput(data=out, label=label)
 
 # FIT THE MODEL
 model = mx.module.Module(net, data_names=['source','target'], context=ctx)
@@ -127,7 +128,7 @@ if just_print_graph:
     exit(0)
 
 
-max_epoch=8
+max_epoch=3
 
 latest_epoch=0 # dummy, don't change
 
@@ -138,6 +139,11 @@ latest=str(latest_epoch).zfill(4)
 
 model_params=model_prefix+'-'+latest+'.params'
 model_symbols=model_prefix+'-symbol.json'
+
+if save:
+    epoch_end_callback = mx.callback.do_checkpoint(model_prefix)
+else:
+    epoch_end_callback = None
 
 if os.path.exists(model_params) and os.path.exists(model_symbols) and max_epoch==latest_epoch and save:
     print("Model %s found, loading" % model_prefix)
@@ -185,7 +191,7 @@ else:
             optimizer='sgd', optimizer_params={'learning_rate':0.01, 'momentum':0.9},
             initializer=mx.initializer.Xavier(),
             batch_end_callback = mx.callback.Speedometer(batch_size, 10),
-            epoch_end_callback = mx.callback.do_checkpoint(model_prefix),
+            epoch_end_callback = epoch_end_callback,
             arg_params=arg_params,
             aux_params=aux_params,
             begin_epoch=latest_epoch,
@@ -204,8 +210,8 @@ else:
             eval_metric = 'acc',
             optimizer='sgd', optimizer_params={'learning_rate':0.01, 'momentum':0.9},
             initializer=mx.initializer.Xavier(),
-            batch_end_callback=mx.callback.Speedometer(batch_size, 10),
-            epoch_end_callback = mx.callback.do_checkpoint(model_prefix),
+            batch_end_callback = mx.callback.Speedometer(batch_size, 10),
+            epoch_end_callback = epoch_end_callback,
             num_epoch=max_epoch
         )
 
