@@ -106,12 +106,12 @@ flat=mx.sym.Flatten(data=rnn_output)
 
 fc=mx.sym.FullyConnected(
     data=flat,
-    num_hidden=max_string_len*vocab_size_train
+    num_hidden=max_string_len*vocab_size_label
 )
 act=mx.sym.Activation(data=fc, act_type='relu')
 
 
-out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
+out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_label)))
 
 net = mx.sym.LinearRegressionOutput(data=out, label=label)
 
