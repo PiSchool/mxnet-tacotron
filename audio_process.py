@@ -7,7 +7,8 @@ from params import Hyperparams as hp
 
 def load_wave(audiofilepath):
     return dsp.load(audiofilepath,sr=hp.sr)
-
+def save_wave(file_path,waveform,sr):
+	dsp.output.write_wav(file_path, waveform, sr)
 def spectrogram(magn):
     #D = dsp.stft(y=y, n_fft=hp.n_fft, win_length=hp.win_length, hop_length=hp.hop_length)
     S = _amp_to_db(magn) - hp.ref_level_db
@@ -24,7 +25,6 @@ def do_spectrograms(y):
 
 def inv_spectrogram(spectrogram):
   '''Converts spectrogram to waveform using librosa'''
-  print("SPECTRUM -> WAV")
   S = _db_to_amp(_denormalize(spectrogram) + hp.ref_level_db)  # Convert back to linear
   return _griffin_lim(S ** hp.power)          # Reconstruct phase
 
@@ -33,12 +33,10 @@ def _griffin_lim(S):
   '''librosa implementation of Griffin-Lim
   Based on https://github.com/librosa/librosa/issues/434
   '''
-  print("Start",hp.griffin_lim_iters,"griffin lim iterations")
   angles = np.exp(2j * np.pi * np.random.rand(*S.shape))
   S_complex = np.abs(S).astype(np.complex)
   y = dsp.istft(S_complex * angles, hop_length=hp.hop_length, win_length=hp.win_length)
   for i in range(hp.griffin_lim_iters):
-    print("iter",i)
     angles = np.exp(1j * np.angle(dsp.stft(y=y, n_fft=hp.n_fft, win_length=hp.win_length, hop_length=hp.hop_length)))
     y = dsp.istft(S_complex * angles, hop_length=hp.hop_length, win_length=hp.win_length)
   return y
