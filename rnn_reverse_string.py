@@ -13,7 +13,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 GPU_COUNT = 1 # increase if you have more
 ctx = [mx.gpu(i) for i in range(GPU_COUNT)]
 
-num_hidden=64
+num_hidden=128
 embed_size=256
 dataset_size=5000
 batch_size = 100
@@ -106,12 +106,12 @@ flat=mx.sym.Flatten(data=rnn_output)
 
 fc=mx.sym.FullyConnected(
     data=flat,
-    num_hidden=max_string_len*vocab_size_train
+    num_hidden=max_string_len*vocab_size_label
 )
 act=mx.sym.Activation(data=fc, act_type='relu')
 
 
-out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_train)))
+out = mx.sym.Reshape(data=act, shape=((0,max_string_len,vocab_size_label)))
 
 net = mx.sym.LinearRegressionOutput(data=out, label=label)
 
@@ -187,7 +187,7 @@ else:
         model.fit(
             train_iter,
             eval_data=eval_iter,
-            eval_metric='acc',
+            eval_metric='mse',
             optimizer='sgd', optimizer_params={'learning_rate':0.01, 'momentum':0.9},
             initializer=mx.initializer.Xavier(),
             batch_end_callback = mx.callback.Speedometer(batch_size, 10),
@@ -207,7 +207,7 @@ else:
         model.fit(
             train_data=train_iter,
             eval_data=eval_iter,
-            eval_metric = 'acc',
+            eval_metric = 'mse',
             optimizer='sgd', optimizer_params={'learning_rate':0.01, 'momentum':0.9},
             initializer=mx.initializer.Xavier(),
             batch_end_callback = mx.callback.Speedometer(batch_size, 10),
