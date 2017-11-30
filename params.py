@@ -17,8 +17,8 @@ class Hyperparams:
 	if dataset_name == "digit_200":
 		sr = 8000
 	if dataset_name == "bible":
-		batch_size = 15
-		sr = 22050
+        batch_size = 15
+        sr = 22050
         max_seconds_length = 10
 	# data
 	csv_file = '../'+dataset_name+'/'+dataset_name+'.csv'
