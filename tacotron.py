@@ -332,14 +332,14 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
     #Now two other projections (convolutions) are done. Same padding thing
     poold_bank_padded = mx.sym.concat(poold_bank,mx.sym.zeros((hp.batch_size,K*(hp.emb_size//2),2)),dim=2)
 
-    proj1 = mx.sym.Convolution(data=poold_bank_padded, kernel=(3,), num_filter=proj1_size, name='CBHG_conv1',layout='NCW')
+    proj1 = mx.sym.Convolution(data=poold_bank_padded, kernel=(3,), num_filter=proj1_size, name='CBHG_conv1')
     proj1 = mx.sym.Activation(data=proj1, act_type='relu', name='CBHG_act1')
 
     if hp.use_proj1_batchNorm:
         proj1 = mx.sym.BatchNorm(data=proj1, name="batchNorm_proj1")
 
     proj1_padded = mx.sym.concat(proj1,mx.sym.zeros((hp.batch_size,hp.emb_size,2)),dim=2)
-    proj2 = mx.sym.Convolution(proj1_padded, kernel=(3,), num_filter=proj2_size, name='CBHG_conv2',layout='NCW')
+    proj2 = mx.sym.Convolution(proj1_padded, kernel=(3,), num_filter=proj2_size, name='CBHG_conv2')
 
     if hp.use_proj2_batchNorm:
         proj2=mx.sym.BatchNorm(data=proj2, name="batchNorm_proj2")
