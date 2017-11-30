@@ -117,24 +117,24 @@ class AudioIter(mx.io.DataIter):
 
                 wav_length = len(wav)
                 diff = self.max_samples_length -wav_length
-                print("num of zeros to add",diff)
+                #print("num of zeros to add",diff)
                 zeros = np.zeros(diff-1) if (diff-1)>0 else []
-                print("zeros len:",len(zeros))
-                print("wav len:",len(wav))
-                print("wav shape:",wav.shape)
+                #print("zeros len:",len(zeros))
+                #print("wav len:",len(wav))
+                #print("wav shape:",wav.shape)
                 padded = np.append(wav,zeros)
                 #to be totally sure
                 padded= padded[0:self.max_samples_length]
-                print("wav pad:",len(padded))
+                #print("wav pad:",len(padded))
                 # get the spectrum from the padded sound
                 spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
-                print(spectrum_mel.shape)
+                #print(spectrum_mel.shape)
                 # save into the ndarray
         #         spectra_lin[indx,:,:]=np.transpose(spectrum_lin[:,:])
         #         spectra_mel[indx,:,:]=np.transpose(spectrum_mel[:,:])
                 data_batch.append(np.transpose(spectrum_mel))
                 label_batch.append(np.transpose(spectrum_lin))
-                print(spectrum_lin.shape)
+                #print(spectrum_lin.shape)
                 self.cur_pointer+=1
 
             label = [mx.nd.array(label_batch)]#, self.vocab_size_label]
