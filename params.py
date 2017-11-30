@@ -3,7 +3,7 @@ class Hyperparams:
     '''Hyper parameters'''
 
     # dataset used
-    dataset_name = "digit_50"
+    dataset_name = "bible"
 
     batch_size = 5
     csv_file = '../train_data/dataset.csv'
