@@ -3,22 +3,23 @@ class Hyperparams:
 	'''Hyper parameters'''
 
 	# dataset used
-	dataset_name = "bible"
+	dataset_name = "digit_50"
 
 	batch_size = 5
 	csv_file = '../train_data/dataset.csv'
 
-	num_epochs = 500
-
+	num_epochs = 100
 	if dataset_name == "digit_50":
 		sr = 8000
-		#batch_size=1
+		batch_size=5
 		sound_fpath = '../digit_50'
+		max_seconds_length = 2.9
 	if dataset_name == "digit_200":
 		sr = 8000
 	if dataset_name == "bible":
-		batch_size = 32
+		batch_size = 15
 		sr = 22050
+        max_seconds_length = 10
 	# data
 	csv_file = '../'+dataset_name+'/'+dataset_name+'.csv'
 	sound_fpath = '../'+dataset_name
