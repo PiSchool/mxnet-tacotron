@@ -8,7 +8,7 @@ from params import Hyperparams as hp
 def load_wave(audiofilepath):
     return dsp.load(audiofilepath,sr=hp.sr)
 def save_wave(file_path,waveform,sr):
-	dsp.output.write_wav(file_path, waveform, sr)
+	dsp.output.write_wav(file_path, waveform, sr,norm=True)
 def spectrogram(magn):
     #D = dsp.stft(y=y, n_fft=hp.n_fft, win_length=hp.win_length, hop_length=hp.hop_length)
     S = _amp_to_db(magn) - hp.ref_level_db

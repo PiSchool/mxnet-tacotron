@@ -10,8 +10,9 @@ from __future__ import print_function
 import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd
-from IPython.display import clear_output
-ctx= mx.cpu()
+
+ctx= mx.gpu(0)
+
 import csv
 import codecs
 import re
@@ -21,47 +22,47 @@ import os
 from os.path import expanduser
 import math
 import logging
-from params import Hyperparams as hp 
-import IPython.display
+from params import Hyperparams as hp
+
 import time
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 
 # <h3> DATA SETUP </h3>
-# 
-# <b>Data</b>: 
+#
+# <b>Data</b>:
 # text - mel spectrograms - linear spectrograms
-# 
-# <b>Shapes</b>: 
-# (batch_size, pad_to_max_text_length) - (batch_size, 80, pad_to_max_audio_length) - (batch_size, 1025, pad_to_max_audio_length) 
-# 
+#
+# <b>Shapes</b>:
+# (batch_size, pad_to_max_text_length) - (batch_size, 80, pad_to_max_audio_length) - (batch_size, 1025, pad_to_max_audio_length)
+#
 # <b>Note_1</b>: I'm using a little batch size due my little dummy train dataset <br/>
 # <b>Note_2</b>: on Tensorflow implementation there is a reshape step by reduction factor r described in the paper.<br/> Tensorflow data got these shapes:
-# 
-# <b>text</b>: 
+#
+# <b>text</b>:
 # (batch_size,length_text)
 # <b>mel spectrograms</b>:
 # (batch_size, time_frames, 80&ast;r)
 # <b>linear spectrograms</b>:
 # (batch_size, time_frames, 1025&ast;r)
-# 
+#
 # <br/>
 # more info at: https://github.com/Kyubyong/tacotron/blob/master/utils.py#L58
 
 # In[2]:
 
 
-def generate_vocabulary(texts_list):    
+def generate_vocabulary(texts_list):
     # get unique chars and put into a list
     return list(set(''.join(texts_list)))
-    
+
 
 def generate_chars2numbers_mappings(vocabulary):
     # create a chars <-> numbers mappings
     char2index = {char:i for i,char in enumerate(vocabulary)}
     index2char = {i:char for i,char in enumerate(vocabulary)}
-    
+
     return char2index,index2char
 
 
@@ -72,25 +73,25 @@ def text2numbers(texts_list,char2index_mapping):
     return numerical_texts
 
 def open_data(input_file_path):
-      
+
     texts, sound_files = [], []
-    
+
     reader = csv.reader(codecs.open(input_file_path, 'rb', 'utf-8'))
     for row in reader:
-        sound_filename, text = row
+        sound_filename, text, _ = row
         sound_file = hp.sound_fpath +"/"+ sound_filename + ".wav"
         text = re.sub(r"[^ a-z']", "", text.strip().lower())
-         
+
         texts.append(text)
         sound_files.append(sound_file)
-             
+
     return texts, sound_files
 # Returns: one-hot-encoded-text, linear spectrum, mel spectrum
 # Shapes: (data_length, ?, ?) , (data_length, (n_fft/2)+1, ceil(max_audio_length/hop_size)), (data_length, n_mels, ceil(max_audio_length/hop_size))
 def generate_text_spectra(texts_list, sound_labels):
-    
+
     assert len(sound_labels) == len(texts_list)
-    
+
     print("Generating spectrograms")
     print("Sample length for windowing:",hp.win_length)
     print("Sample length for hop:",hp.hop_length,"\n")
@@ -102,8 +103,8 @@ def generate_text_spectra(texts_list, sound_labels):
     print("max audio sample length:",max_samples_length)
 
     #prepare the data structure for save all the spectra
-    spectra_lin = mx.ndarray.zeros((len(sound_labels),math.ceil(max_samples_length/hp.hop_length),1+(hp.n_fft//2)))
-    spectra_mel = mx.ndarray.zeros((len(sound_labels),math.ceil(max_samples_length/hp.hop_length),hp.n_mels))
+    spectra_lin = []#mx.ndarray.zeros((len(sound_labels),math.ceil(max_samples_length/hp.hop_length),1+(hp.n_fft//2)))
+    spectra_mel = []#mx.ndarray.zeros((len(sound_labels),math.ceil(max_samples_length/hp.hop_length),hp.n_mels))
     mel_basis = audio_process.get_mel_basis()
     print("Padding audio and compute mel and lin spectra..")
     for indx,wav_sr in enumerate(wavs_srs):
@@ -117,11 +118,11 @@ def generate_text_spectra(texts_list, sound_labels):
         spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
 #         print(padded_spectrum_lin.shape)
         # save into the ndarray
-        spectra_lin[indx,:,:]=np.transpose(spectrum_lin[:,:])
-        spectra_mel[indx,:,:]=np.transpose(spectrum_mel[:,:])
-    
-    
-    
+        spectra_lin.append(np.transpose(spectrum_lin))#[indx,:,:]=np.transpose(spectrum_lin[:,:])
+        spectra_mel.append(np.transpose(spectrum_mel))#[indx,:,:]=np.transpose(spectrum_mel[:,:])
+
+
+
     texts_one_hot=None
     if hp.do_text_processing:
         print("Processing text..")
@@ -132,7 +133,7 @@ def generate_text_spectra(texts_list, sound_labels):
         print("Converting text to integers..")
         texts_numerical = text2numbers(texts_list,char2index)
         # simulate a different sequence length
-    #   /D E L E T E M E/ 
+    #   /D E L E T E M E/
         texts_numerical[4]=np.concatenate((texts_numerical[4],[8,9]))
     #   /D E L E T E M E/
 
@@ -142,8 +143,8 @@ def generate_text_spectra(texts_list, sound_labels):
         # helper function for the lambda expression
         def _padseq(seq,max_len):
             diff=max_len-len(seq)
-            if diff>0: 
-                # SHITTY USELESS MXNET API. CANNOT CONCAT A NON-EMPTY WITH EMPTY ARRAY. 
+            if diff>0:
+                # SHITTY USELESS MXNET API. CANNOT CONCAT A NON-EMPTY WITH EMPTY ARRAY.
                 # EDIT: use numpy now. Still using this condition for safety
                 pad = np.zeros(diff)-1
                 seq=np.append(seq,[pad])
@@ -155,27 +156,27 @@ def generate_text_spectra(texts_list, sound_labels):
                     lambda seq: _padseq(seq,longest_sequence_len), texts_numerical
                 )
             )
-        )   
+        )
 
         texts_one_hot=mx.ndarray.one_hot(padded_sequences,vocab_size)
-    
-    return texts_one_hot, spectra_lin, spectra_mel
+
+    return texts_one_hot, mx.nd.array(spectra_lin), mx.nd.array(spectra_mel)
 
 
 # In[3]:
 
 
 
-class NDArrayIter_NTC(mx.io.NDArrayIter):
-    
-    @property
-    def provide_data(self):
-        """The name and shape of data provided by this iterator."""
-        return [
-            mx.io.DataDesc(k, tuple([self.batch_size] + list(v.shape[1:])), v.dtype, layout="NTC")
-            for k, v in self.data
-        ]
-    
+#class NDArrayIter_NTC(mx.io.NDArrayIter):
+
+#    @property
+#    def provide_data(self):
+#        """The name and shape of data provided by this iterator."""
+#        return [
+#            mx.io.DataDesc(k, tuple([self.batch_size] + list(v.shape[1:])), v.dtype, layout="NTC")
+#            for k, v in self.data
+#        ]
+
 
 
 # In[4]:
@@ -187,7 +188,7 @@ def get_iterators():
 
     texts_one_hot, spectra_lin, spectra_mel = generate_text_spectra(texts_list, sound_files_list)
 
-    # get 10% of dataset as eval data 
+    # get 10% of dataset as eval data
     eval_indxs = (np.random.randint(0, high=size, size=size//10))
     #eval_indxs=[32 10 28 19 29]
     # remaining indexes for the train
@@ -198,7 +199,7 @@ def get_iterators():
 
     #take from the array (1st arg) the indexes of the first dimension specified by the 2nd arg
     #train_txt take the one_hot matrices
-    
+
     if hp.do_text_processing:
         train_txt_data = mx.ndarray.take(texts_one_hot,mx.nd.array(train_indxs))
         eval_txt_data = mx.ndarray.take(texts_one_hot,mx.nd.array(eval_indxs))
@@ -215,12 +216,12 @@ def get_iterators():
 
     try:
         print("Populating traindata iterator")
-        traindata_iterator = NDArrayIter_NTC(data={'mel_spectrogram':train_data},
+        traindata_iterator = mx.io.NDArrayIter(data={'mel_spectrogram':train_data},
                                 label={'linear_spectrogram':train_label},
                                 batch_size=hp.batch_size,
                                 shuffle=True)
         print("Populating evaldata iterator")
-        evaldata_iterator = NDArrayIter_NTC(data={'mel_spectrogram':eval_data},
+        evaldata_iterator = mx.io.NDArrayIter(data={'mel_spectrogram':eval_data},
                                 label={'linear_spectrogram':eval_label},
                                 batch_size=hp.batch_size)
     except Exception as e:
@@ -230,7 +231,7 @@ def get_iterators():
 #     for batch in traindata_iterator:
 #         print(batch.data[0].asnumpy())
 #         print(batch.data[0].shape)
-    
+
     return traindata_iterator,evaldata_iterator, train_data.shape[1],eval_data,eval_label
 
 
@@ -248,11 +249,11 @@ def prenet_pass(data):
     fc1 = mx.symbol.FullyConnected(data=data, num_hidden=hp.emb_size, name='prenet_fc1',flatten=False)
     act1 = mx.symbol.Activation(data=fc1, act_type='relu', name='prenet_act1')
     drop1 = mx.symbol.Dropout(act1, p=0.5, name='prenet_drop1')
-    
+
     fc2 = mx.symbol.FullyConnected(data=drop1, num_hidden=hp.emb_size//2, name='prenet_fc2', flatten=False)
     act2 = mx.symbol.Activation(data=fc2, act_type='relu', name='prenet_act2')
     prenet_output = mx.symbol.Dropout(act2, p=0.5, name='prenet_drop2')
-    
+
     return prenet_output
 
 
@@ -265,32 +266,34 @@ def prenet_pass(data):
 def conv1dBank(conv_input, K): # 1,88,128 # N C W -> 1 80 88
     #(32,88,128)
     #N C W (num_batch, channel, width)
-    
-    #The k-th filter got a kernel width of k, with 0<k<=K 
-    conv=mx.sym.Convolution(data=conv_input, kernel=(1,), num_filter=hp.emb_size//2,name="convBank_1",layout='NCW')
+
+    #The k-th filter got a kernel width of k, with 0<k<=K
+    conv=mx.sym.Convolution(data=conv_input, kernel=(1,), num_filter=hp.emb_size//2,name="convBank_1")
     #(32,128,128) ==> (32,K*128,128)
     #(32,num_filter,out_width)
+
+    conv = mx.sym.Activation(data=conv, act_type='relu')
     '''
     BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
     '''
     #(conv, mean, var) = mx.sym.BatchNorm(data=conv, output_mean_var=True)
     if hp.use_convBank_batchNorm:
         conv = mx.sym.BatchNorm(data=conv, name="batchN_bank_1")
-    conv = mx.sym.Activation(data=conv, act_type='relu')
 
     for k in range(2, K+1):
         in_i = mx.sym.concat(conv_input,mx.sym.zeros((hp.batch_size,hp.emb_size//2,k-1)),dim=2)
-        convi = mx.sym.Convolution(data=in_i, kernel=(k,), num_filter=hp.emb_size//2,layout='NCW',name="convBank_"+str(k))
-        
+        convi = mx.sym.Convolution(data=in_i, kernel=(k,), num_filter=hp.emb_size//2,name="convBank_"+str(k))
+
+        convi = mx.sym.Activation(data=convi,act_type='relu')
         '''
         BatchNorm: Got error out_grad.size() check failed 1==3 using GPU during fit()
         '''
+
         #(convi, mean, var) = mx.sym.BatchNorm(data=convi, output_mean_var=True)
-        convi = mx.sym.BatchNorm(data=convi, name="batchN_bank_"+str(k))
         if hp.use_convBank_batchNorm:
-            convi = mx.sym.Activation(data=convi, act_type='relu')
-        conv = mx.symbol.concat(conv,convi,dim=1)   
-    
+            convi = mx.sym.BatchNorm(data=convi, name='batchN_bank_'+str(k))
+        conv = mx.symbol.concat(conv,convi,dim=1)
+
     return conv
 
 
@@ -328,15 +331,16 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
     #(32,1024,127)
     #Now two other projections (convolutions) are done. Same padding thing
     poold_bank_padded = mx.sym.concat(poold_bank,mx.sym.zeros((hp.batch_size,K*(hp.emb_size//2),2)),dim=2)
+
     proj1 = mx.sym.Convolution(data=poold_bank_padded, kernel=(3,), num_filter=proj1_size, name='CBHG_conv1',layout='NCW')
-    
+    proj1 = mx.sym.Activation(data=proj1, act_type='relu', name='CBHG_act1')
+
     if hp.use_proj1_batchNorm:
         proj1 = mx.sym.BatchNorm(data=proj1, name="batchNorm_proj1")
-    proj1 = mx.sym.Activation(data=proj1, act_type='relu', name='CBHG_act1')
 
     proj1_padded = mx.sym.concat(proj1,mx.sym.zeros((hp.batch_size,hp.emb_size,2)),dim=2)
     proj2 = mx.sym.Convolution(proj1_padded, kernel=(3,), num_filter=proj2_size, name='CBHG_conv2',layout='NCW')
-    
+
     if hp.use_proj2_batchNorm:
         proj2=mx.sym.BatchNorm(data=proj2, name="batchNorm_proj2")
 
@@ -344,7 +348,7 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
     residual= proj2 + data
 
     residual = mx.sym.swapaxes(residual,1,2)
-    
+
     #A 4 highway layers is created
     for i in range(4):
         residual = highway_layer(residual,i)
@@ -358,7 +362,7 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
     )
 
     bi_gru_outputs, bi_gru_states = bidirectional_gru_cell.unroll(num_unroll, inputs=highway_pass, merge_outputs=True)
-    
+
     return bi_gru_outputs
 
 
@@ -383,13 +387,13 @@ def encoder(data):
 def decoder(input_spectrogram,context,reduction_factor):
     #embed_vector = mx.sym.Embedding(data=input_spectrogram, input_dim=80, output_dim=emb_size, name='decoder_embed')
     prenet_output = prenet_pass(input_spectrogram)
-        
+
     stack = mx.rnn.SequentialRNNCell()
     stack.add(mx.rnn.GRUCell(num_hidden=hp.emb_size,prefix='decoder_layer1_'))
     stack.add(mx.rnn.GRUCell(num_hidden=hp.emb_size,prefix='decoder_layer2_'))
-    
+
     residual_gru_stack = mx.rnn.ResidualCell(stack)
-    
+
     gru_outputs,states = residual_gru_stack.unroll(length=1,
                                                inputs=prenet_output,
                                                begin_state=context,
@@ -399,7 +403,7 @@ def decoder(input_spectrogram,context,reduction_factor):
         data=mx.symbol.FullyConnected(data=gru_outputs, num_hidden=80*reduction_factor),
         act_type="relu"
     )
-    
+
     return predicted_frames, states
 
 
@@ -408,10 +412,10 @@ def decoder(input_spectrogram,context,reduction_factor):
 
 def postprocess(input_mel_spectrograms,max_audio_length):
     in_cbhg = prenet_pass(input_mel_spectrograms)
-    in_cbhg_sw= mx.sym.swapaxes(in_cbhg,1,2) 
-    
+    in_cbhg_sw= mx.sym.swapaxes(in_cbhg,1,2)
+
     bi_gru_out =CBHG(in_cbhg_sw,hp.post_process_num_banks,hp.emb_size,hp.emb_size//2,max_audio_length)
-    
+
     linear_scale_spectrograms = mx.symbol.FullyConnected(data=bi_gru_out,num_hidden=(hp.n_fft//2)+1,flatten=False)
     return linear_scale_spectrograms
 
@@ -419,7 +423,7 @@ def postprocess(input_mel_spectrograms,max_audio_length):
 # In[12]:
 
 
-np.random.seed(3) #[42 24  3  8  0]
+np.random.seed(2) #[42 24  3  8  0]
 traindata_iterator, evaldata_iterator, max_audio_length,eval_data,eval_label = get_iterators()
 linear_spectrogram = mx.sym.Variable('linear_spectrogram')
 mel_spectrogram = mx.sym.Variable('mel_spectrogram')
@@ -447,9 +451,6 @@ model = mx.mod.Module(symbol=net,
 
 
 # In[15]:
-
-
-hp.num_epochs=20
 
 checkpoints_dir = expanduser("~")+"/results/CBHG_model/"+hp.dataset_name+"/"+"".join(str(time.time()).split('.'))
 prefix = hp.dataset_name
