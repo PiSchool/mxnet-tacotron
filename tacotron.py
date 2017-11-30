@@ -177,7 +177,7 @@ def open_data(input_file_path):
 
     reader = csv.reader(codecs.open(input_file_path, 'rb', 'utf-8'))
     for row in reader:
-        sound_filename, text = row
+        sound_filename, text, _ = row
         sound_file = hp.sound_fpath +"/"+ sound_filename + ".wav"
         text = re.sub(r"[^ a-z']", "", text.strip().lower())
 
