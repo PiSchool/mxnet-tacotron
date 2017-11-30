@@ -118,7 +118,8 @@ class AudioIter(mx.io.DataIter):
                 wav_length = len(wav)
                 diff = self.max_samples_length -wav_length
         #         print("num of zeros to add",diff)
-                padded = np.append(wav,np.zeros(diff-1))
+                zeros = np.zeros(diff-1) if (diff-1)>0 else []
+                padded = np.append(wav,zeros)
                 # get the spectrum from the padded sound
                 spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
         #         print(padded_spectrum_lin.shape)
