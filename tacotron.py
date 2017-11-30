@@ -10,9 +10,9 @@ from __future__ import print_function
 import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd
-
+from IPython.display import clear_output
 ctx= mx.gpu(0)
-
+import csv
 import codecs
 import re
 import audio_process
@@ -22,7 +22,6 @@ from os.path import expanduser
 import math
 import logging
 from params import Hyperparams as hp
-
 import time
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -52,12 +51,172 @@ logging.getLogger().setLevel(logging.DEBUG)
 # In[2]:
 
 
+
+# THIS IS A VERY SIMPLE ITERATOR THAT, TAKEN A LIST OF SENTENCES ENCODED AS INTEGERS, OUTPUTS THE BATCHES IN ONE HOT FORM (TO OVERCOME MEMORY ALLOCATION ISSUES)
+
+class AudioIter(mx.io.DataIter):
+    def __init__(self,
+                 audiofile_list,
+                 data_names, label_names,
+                 batch_size=10):
+
+        self.max_samples_length = int(hp.max_seconds_length*hp.sr)
+        #print("max_samples_length",self.max_samples_length)
+        self.num_batches = len(audiofile_list)//batch_size
+        self.batch_size = batch_size
+        self.cur_pointer = 0
+        self.cur_batch = 0
+        self.audiofile_list = audiofile_list
+
+        max_n_frames = math.ceil(self.max_samples_length/hp.hop_length)
+        #print("max_n_frames",max_n_frames)
+        self._provide_data = [
+            mx.io.DataDesc(
+                name=data_name,
+                shape=(batch_size, max_n_frames, hp.n_mels),
+                layout='NTC') for data_name in data_names
+        ]
+        self._provide_label = [
+            mx.io.DataDesc(
+                name=label_name,
+                shape=(batch_size, max_n_frames, 1+(hp.n_fft//2)),
+                layout='NTC') for label_name in label_names
+        ]
+        #assert max_len_data == max_len_label
+#         self.data = data
+#         self.label = label
+
+    def __iter__(self):
+        return self
+
+    def reset(self):
+        self.cur_batch = 0
+        self.cur_pointer = 0
+
+    def __next__(self):
+        return self.next()
+
+    @property
+    def provide_data(self):
+        return self._provide_data
+
+    @property
+    def provide_label(self):
+        return self._provide_label
+
+    def next(self):
+        if self.cur_batch < self.num_batches:
+
+            data_batch = []
+            label_batch = []
+            for i in range(self.batch_size):
+                #load the audio file
+                wav, sr = audio_process.load_wave(self.audiofile_list[self.cur_pointer])
+
+                assert sr == hp.sr
+
+                wav_length = len(wav)
+                diff = self.max_samples_length -wav_length
+        #         print("num of zeros to add",diff)
+                padded = np.append(wav,np.zeros(diff-1))
+                # get the spectrum from the padded sound
+                spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
+        #         print(padded_spectrum_lin.shape)
+                # save into the ndarray
+        #         spectra_lin[indx,:,:]=np.transpose(spectrum_lin[:,:])
+        #         spectra_mel[indx,:,:]=np.transpose(spectrum_mel[:,:])
+                data_batch.append(np.transpose(spectrum_mel))
+                label_batch.append(np.transpose(spectrum_lin))
+                #print(spectrum_lin.shape)
+                self.cur_pointer+=1
+
+            label = [mx.nd.array(label_batch)]#, self.vocab_size_label]
+
+            data = [mx.nd.array(data_batch)]# self.vocab_size_data)] + label
+
+
+            self.cur_batch += 1
+
+            return mx.io.DataBatch(
+                data,
+                label,
+                pad=0,
+                provide_data=self._provide_data,
+                provide_label=self._provide_label
+            )
+        else:
+            raise StopIteration
+
+
+
+# In[3]:
+
+
+def generate_vocabulary(texts_list):
+    # get unique chars and put into a list
+    return list(set(''.join(texts_list)))
+
+
+def generate_chars2numbers_mappings(vocabulary):
+    # create a chars <-> numbers mappings
+    char2index = {char:i for i,char in enumerate(vocabulary)}
+    index2char = {i:char for i,char in enumerate(vocabulary)}
+
+    return char2index,index2char
+
+
+def text2numbers(texts_list,char2index_mapping):
+    numerical_texts=[]
+    for text in texts_list:
+        numerical_texts.append([char2index_mapping[char] for char in text])
+    return numerical_texts
+
+def open_data(input_file_path):
+
+    texts, sound_files = [], []
+
+    reader = csv.reader(codecs.open(input_file_path, 'rb', 'utf-8'))
+    for row in reader:
+        sound_filename, text = row
+        sound_file = hp.sound_fpath +"/"+ sound_filename + ".wav"
+        text = re.sub(r"[^ a-z']", "", text.strip().lower())
+
+        texts.append(text)
+        sound_files.append(sound_file)
+
+    return texts, sound_files
+
+# In[4]:
+
+
+def get_iterators():
+    texts_list, sound_files_list = open_data(hp.csv_file)
+
+    size=len(sound_files_list)
+    # get 10% of dataset as eval data
+    eval_indxs = (np.random.randint(0, high=size, size=size//10))
+
+    # remaining indexes for the train
+    train_indxs = np.setdiff1d(np.arange(size),eval_indxs)
+
+
+    print("I will take those for eval:",eval_indxs)
+    #print("..and the remaining for train:",train_indxs,"\n")
+
+    train_set = np.ndarray.take(np.asarray(sound_files_list),train_indxs)
+    eval_set = np.ndarray.take(np.asarray(sound_files_list),eval_indxs)
+
+    train_iter = AudioIter(train_set,["mel_spectrogram"],["linear_spectrogram"],hp.batch_size)
+    eval_iter = AudioIter(eval_set,["mel_spectrogram"],["linear_spectrogram"],hp.batch_size)
+
+    return train_iter, eval_iter
+
+
 # <h3> Modules </h3>
 
 # <h4> Prenet </h4>
 
 # In[5]:
-
 
 """
 FC-256-ReLU → Dropout(0.5) → FC-128-ReLU → Dropout(0.5)
@@ -149,14 +308,14 @@ def CBHG(data,K,proj1_size,proj2_size,num_unroll):
     #Now two other projections (convolutions) are done. Same padding thing
     poold_bank_padded = mx.sym.concat(poold_bank,mx.sym.zeros((hp.batch_size,K*(hp.emb_size//2),2)),dim=2)
 
-    proj1 = mx.sym.Convolution(data=poold_bank_padded, kernel=(3,), num_filter=proj1_size, name='CBHG_conv1',layout='NCW')
+    proj1 = mx.sym.Convolution(data=poold_bank_padded, kernel=(3,), num_filter=proj1_size, name='CBHG_conv1')
     proj1 = mx.sym.Activation(data=proj1, act_type='relu', name='CBHG_act1')
 
     if hp.use_proj1_batchNorm:
         proj1 = mx.sym.BatchNorm(data=proj1, name="batchNorm_proj1")
 
     proj1_padded = mx.sym.concat(proj1,mx.sym.zeros((hp.batch_size,hp.emb_size,2)),dim=2)
-    proj2 = mx.sym.Convolution(proj1_padded, kernel=(3,), num_filter=proj2_size, name='CBHG_conv2',layout='NCW')
+    proj2 = mx.sym.Convolution(proj1_padded, kernel=(3,), num_filter=proj2_size, name='CBHG_conv2')
 
     if hp.use_proj2_batchNorm:
         proj2=mx.sym.BatchNorm(data=proj2, name="batchNorm_proj2")
@@ -240,23 +399,20 @@ def postprocess(input_mel_spectrograms,max_audio_length):
 # In[12]:
 
 
-np.random.seed(2) #[42 24  3  8  0]
-traindata_iterator, evaldata_iterator, max_audio_length,eval_data,eval_label = get_iterators()
+np.random.seed(3) #[42 24  3  8  0]
+traindata_iterator, evaldata_iterator = get_iterators()
 linear_spectrogram = mx.sym.Variable('linear_spectrogram')
 mel_spectrogram = mx.sym.Variable('mel_spectrogram')
-print("max_audio_length: ",max_audio_length)
 
 
 # In[13]:
 
 
-#traindata_iterator.provide_data
+max_n_frames = math.ceil((hp.max_seconds_length*hp.sr)/hp.hop_length)
 
-
-# In[14]:
-
-
-net = mx.sym.MAERegressionOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)
+print("max_audio_length: ",hp.max_seconds_length)
+print("max_n_frames:",max_n_frames)
+net = mx.sym.MAERegressionOutput(data=postprocess(mel_spectrogram,max_n_frames), label=linear_spectrogram)
 #net = mx.sym.SoftmaxOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)
 model = mx.mod.Module(symbol=net,
                       context=ctx,
@@ -267,7 +423,10 @@ model = mx.mod.Module(symbol=net,
 # model.load("/home/stefano/CBHG_model/tacotron_15119700453363569/prefix")
 
 
-# In[15]:
+# In[14]:
+
+
+hp.num_epochs=20
 
 checkpoints_dir = expanduser("~")+"/results/CBHG_model/"+hp.dataset_name+"/"+"".join(str(time.time()).split('.'))
 prefix = hp.dataset_name
@@ -300,7 +459,7 @@ model.fit(
 )
 
 
-# In[22]:
+# In[20]:
 
 
 '''
@@ -348,4 +507,3 @@ for i,predicted_spectr in enumerate(predictions_2):
     y = audio_process.inv_spectrogram(np.transpose(predicted_spectr.asnumpy()))
     audio_process.save_wave(checkpoints_dir+"/"+prefix+"_checkpoint2_"+str(i),y,hp.sr)
 #
-

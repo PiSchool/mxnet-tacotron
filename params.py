@@ -8,17 +8,17 @@ class Hyperparams:
 	batch_size = 5
 	csv_file = '../train_data/dataset.csv'
 
-	num_epochs = 150
-	
+	num_epochs = 500
+
 	if dataset_name == "digit_50":
-		sr = 8000 
+		sr = 8000
 		#batch_size=1
 		sound_fpath = '../digit_50'
 	if dataset_name == "digit_200":
-		sr = 8000 
+		sr = 8000
 	if dataset_name == "bible":
-		batch_size = 15
-		sr = 22050 
+		batch_size = 32
+		sr = 22050
 	# data
 	csv_file = '../'+dataset_name+'/'+dataset_name+'.csv'
 	sound_fpath = '../'+dataset_name
