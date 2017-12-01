@@ -16,6 +16,8 @@ class AudioIter(mx.io.DataIter):
     def __init__(self,
                  audiofile_list,
                  data_names, label_names,
+                 concurrency = None,
+                 start_immediately = False,
                  batch_size=10):
 
         self.max_samples_length = int(hp.max_seconds_length*hp.sr)
@@ -23,7 +25,8 @@ class AudioIter(mx.io.DataIter):
         self.num_batches = len(audiofile_list)//batch_size
         self.batch_size = batch_size
         self.cur_batch = 0
-        self.poolsize=multiprocessing.cpu_count()
+        self.start_immediately = start_immediately
+        self.poolsize=multiprocessing.cpu_count() if concurrency == None else concurrency
         self.audiofile_list = audiofile_list
         self.batches_queue = multiprocessing.Queue()
         self.files_queue = multiprocessing.Queue()
@@ -47,10 +50,12 @@ class AudioIter(mx.io.DataIter):
                 layout='NTC') for label_name in label_names
         ]
 
-        time.sleep(60*5)
+        if not self.start_immediately:
+            time.sleep(60*5)
         #assert max_len_data == max_len_label
 #         self.data = data
 #         self.label = label
+
 
     def __iter__(self):
         return self
@@ -65,7 +70,8 @@ class AudioIter(mx.io.DataIter):
 
         self.threadpool = multiprocessing.Pool(self.poolsize, self.create_batches, (self.files_queue,))
         
-        time.sleep(60*5)
+        if not self.start_immediately:
+            time.sleep(60*5)
 
     def __next__(self):
         return self.next()

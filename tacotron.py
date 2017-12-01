@@ -94,7 +94,6 @@ def open_data(input_file_path):
 
 # In[4]:
 
-
 def get_iterators():
     texts_list, sound_files_list = open_data(hp.csv_file)
 
@@ -111,11 +110,25 @@ def get_iterators():
 
     train_set = np.ndarray.take(np.asarray(sound_files_list),train_indxs)
     eval_set = np.ndarray.take(np.asarray(sound_files_list),eval_indxs)
-
-    train_iter = AudioIter(train_set,["mel_spectrogram"],["linear_spectrogram"],hp.batch_size)
-    eval_iter = AudioIter(eval_set,["mel_spectrogram"],["linear_spectrogram"],hp.batch_size)
+    
+    train_iter = AudioIter(train_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size)
+    eval_iter = AudioIter(eval_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size)
 
     return train_iter, eval_iter
+
+
+def get_test_iterator():
+    concurrency = 1
+    texts_list, sound_files_list = open_data(hp.csv_file)
+
+    size=len(sound_files_list)
+    test_indxs = (np.random.randint(0, high=size, size=(hp.batch_size*(1+concurrency))))
+
+    test_set = np.ndarray.take(np.asarray(sound_files_list),test_indxs)
+
+    test_iter = AudioIter(test_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size, concurrency=concurrency, start_immediately = True)
+
+    return test_iter
 
 
 # <h3> Modules </h3>
@@ -303,113 +316,114 @@ def postprocess(input_mel_spectrograms,max_audio_length):
 
 
 # In[12]:
+if __name__ == "__main__":
+
+    np.random.seed(3) #[42 24  3  8  0]
+    traindata_iterator, evaldata_iterator = get_iterators()
+    linear_spectrogram = mx.sym.Variable('linear_spectrogram')
+    mel_spectrogram = mx.sym.Variable('mel_spectrogram')
 
 
-np.random.seed(3) #[42 24  3  8  0]
-traindata_iterator, evaldata_iterator = get_iterators()
-linear_spectrogram = mx.sym.Variable('linear_spectrogram')
-mel_spectrogram = mx.sym.Variable('mel_spectrogram')
+    # In[13]:
 
 
-# In[13]:
+    max_n_frames = math.ceil((hp.max_seconds_length*hp.sr)/hp.hop_length)
+
+    print("max_audio_length: ",hp.max_seconds_length)
+    print("max_n_frames:",max_n_frames)
+    net = mx.sym.MAERegressionOutput(data=postprocess(mel_spectrogram,max_n_frames), label=linear_spectrogram)
+    #net = mx.sym.SoftmaxOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)
+    model = mx.mod.Module(symbol=net,
+                          context=ctx,
+                          data_names=['mel_spectrogram'],
+                          label_names=['linear_spectrogram']
+                         )
+    # model.bind(for_training=False, data_shapes= traindata_iterator.provide_data, label_shapes=traindata_iterator.provide_label)
+    # model.load("/home/stefano/CBHG_model/tacotron_15119700453363569/prefix")
 
 
-max_n_frames = math.ceil((hp.max_seconds_length*hp.sr)/hp.hop_length)
-
-print("max_audio_length: ",hp.max_seconds_length)
-print("max_n_frames:",max_n_frames)
-net = mx.sym.MAERegressionOutput(data=postprocess(mel_spectrogram,max_n_frames), label=linear_spectrogram)
-#net = mx.sym.SoftmaxOutput(data=postprocess(mel_spectrogram,max_audio_length), label=linear_spectrogram)
-model = mx.mod.Module(symbol=net,
-                      context=ctx,
-                      data_names=['mel_spectrogram'],
-                      label_names=['linear_spectrogram']
-                     )
-# model.bind(for_training=False, data_shapes= traindata_iterator.provide_data, label_shapes=traindata_iterator.provide_label)
-# model.load("/home/stefano/CBHG_model/tacotron_15119700453363569/prefix")
+    # In[14]:
 
 
-# In[14]:
+    hp.num_epochs=20
+
+    checkpoints_dir = expanduser("~")+"/results/CBHG_model/"+hp.dataset_name+"/"+"".join(str(time.time()).split('.'))
+    prefix = hp.dataset_name
+    checkpoint_period = hp.num_epochs//2;
+    if checkpoint_period < 1:
+        checkpoint_period=1
+
+    if not os.path.exists(checkpoints_dir):
+        print("Creating directory for checkpoints")
+        os.makedirs(checkpoints_dir)
+    print("Start training:")
+    print("- Dataset name:",hp.dataset_name)
+    print("- Dataset csv file:",hp.csv_file)
+    print("- Batch size:",hp.batch_size)
+    print("- Epochs:",hp.num_epochs)
+    print("- Checkpoint period:",checkpoint_period)
+    print("- Conv1DBank. use batch normalization:",hp.use_convBank_batchNorm)
+    print("- Projection_1. use batch normalization:",hp.use_proj1_batchNorm)
+    print("- Projection_2. use batch normalization:",hp.use_proj2_batchNorm)
+
+    model.fit(
+            traindata_iterator,
+            eval_data=evaldata_iterator,
+            optimizer=mx.optimizer.Adam(rescale_grad=1/hp.batch_size),
+            optimizer_params={'learning_rate': 0.0001, 'momentum': 0.9},
+            eval_metric='mae',
+            batch_end_callback = mx.callback.Speedometer(hp.batch_size, 10),
+            epoch_end_callback = mx.callback.do_checkpoint(checkpoints_dir+"/"+prefix),
+            num_epoch=hp.num_epochs
+    )
 
 
-hp.num_epochs=20
-
-checkpoints_dir = expanduser("~")+"/results/CBHG_model/"+hp.dataset_name+"/"+"".join(str(time.time()).split('.'))
-prefix = hp.dataset_name
-checkpoint_period = hp.num_epochs//2;
-if checkpoint_period < 1:
-    checkpoint_period=1
-
-if not os.path.exists(checkpoints_dir):
-    print("Creating directory for checkpoints")
-    os.makedirs(checkpoints_dir)
-print("Start training:")
-print("- Dataset name:",hp.dataset_name)
-print("- Dataset csv file:",hp.csv_file)
-print("- Batch size:",hp.batch_size)
-print("- Epochs:",hp.num_epochs)
-print("- Checkpoint period:",checkpoint_period)
-print("- Conv1DBank. use batch normalization:",hp.use_convBank_batchNorm)
-print("- Projection_1. use batch normalization:",hp.use_proj1_batchNorm)
-print("- Projection_2. use batch normalization:",hp.use_proj2_batchNorm)
-
-model.fit(
-        traindata_iterator,
-        eval_data=evaldata_iterator,
-        optimizer=mx.optimizer.Adam(rescale_grad=1/hp.batch_size),
-        optimizer_params={'learning_rate': 0.0001, 'momentum': 0.9},
-        eval_metric='mae',
-        batch_end_callback = mx.callback.Speedometer(hp.batch_size, 10),
-        epoch_end_callback = mx.callback.do_checkpoint(checkpoints_dir+"/"+prefix),
-        num_epoch=hp.num_epochs
-)
+    # In[20]:
 
 
-# In[20]:
+    test_iterator = get_test_iterator()
+    '''
+    Load first checkpoint n: num_epochs/2
+    '''
+    sym_1, arg_params_1, aux_params_1 = mx.model.load_checkpoint(checkpoints_dir+"/"+prefix, hp.num_epochs//2)
+    model_1chkpnt = mx.mod.Module(symbol=sym_1, context=ctx,data_names=['mel_spectrogram'],label_names=['linear_spectrogram'])
+
+    model_1chkpnt.bind(for_training=False, data_shapes= test_iterator.provide_data, label_shapes=test_iterator.provide_label)
+    # assign the loaded parameters to the module
+
+    model_1chkpnt.set_params(arg_params_1, aux_params_1)
+
+    '''
+    Save waveforms of predicted data
+    '''
+    predictions_1 =model.predict(test_iterator)
+
+    for i,predicted_spectr in enumerate(predictions_1):
+        y = audio_process.inv_spectrogram(np.transpose(predicted_spectr.asnumpy()))
+        audio_process.save_wave(checkpoints_dir+"/"+prefix+"_checkpoint1_"+str(i),y,hp.sr)
+    #
 
 
-'''
-Load first checkpoint n: num_epochs/2
-'''
-sym_1, arg_params_1, aux_params_1 = mx.model.load_checkpoint(checkpoints_dir+"/"+prefix, hp.num_epochs//2)
-model_1chkpnt = mx.mod.Module(symbol=sym_1, context=ctx,data_names=['mel_spectrogram'],label_names=['linear_spectrogram'])
-
-model_1chkpnt.bind(for_training=False, data_shapes= traindata_iterator.provide_data, label_shapes=traindata_iterator.provide_label)
-# assign the loaded parameters to the module
-
-model_1chkpnt.set_params(arg_params_1, aux_params_1)
-
-'''
-Save waveforms of predicted data
-'''
-predictions_1 =model.predict(evaldata_iterator)
-
-for i,predicted_spectr in enumerate(predictions_1):
-    y = audio_process.inv_spectrogram(np.transpose(predicted_spectr.asnumpy()))
-    audio_process.save_wave(checkpoints_dir+"/"+prefix+"_checkpoint1_"+str(i),y,hp.sr)
-#
+    # In[21]:
 
 
-# In[21]:
+    '''
+    Load second checkpoint n: num_epochs
+    '''
+    sym_2, arg_params_2, aux_params_2 = mx.model.load_checkpoint(checkpoints_dir+"/"+prefix, hp.num_epochs)
+    model_2chkpnt = mx.mod.Module(symbol=sym_2, context=ctx,data_names=['mel_spectrogram'],label_names=['linear_spectrogram'])
 
+    model_2chkpnt.bind(for_training=False, data_shapes= traindata_iterator.provide_data, label_shapes=traindata_iterator.provide_label)
+    # assign the loaded parameters to the module
 
-'''
-Load second checkpoint n: num_epochs
-'''
-sym_2, arg_params_2, aux_params_2 = mx.model.load_checkpoint(checkpoints_dir+"/"+prefix, hp.num_epochs)
-model_2chkpnt = mx.mod.Module(symbol=sym_2, context=ctx,data_names=['mel_spectrogram'],label_names=['linear_spectrogram'])
+    model_2chkpnt.set_params(arg_params_2, aux_params_2)
 
-model_2chkpnt.bind(for_training=False, data_shapes= traindata_iterator.provide_data, label_shapes=traindata_iterator.provide_label)
-# assign the loaded parameters to the module
+    '''
+    Save waveforms of predicted data
+    '''
+    predictions_2 =model.predict(evaldata_iterator)
 
-model_2chkpnt.set_params(arg_params_2, aux_params_2)
-
-'''
-Save waveforms of predicted data
-'''
-predictions_2 =model.predict(evaldata_iterator)
-
-for i,predicted_spectr in enumerate(predictions_2):
-    y = audio_process.inv_spectrogram(np.transpose(predicted_spectr.asnumpy()))
-    audio_process.save_wave(checkpoints_dir+"/"+prefix+"_checkpoint2_"+str(i),y,hp.sr)
-#
+    for i,predicted_spectr in enumerate(predictions_2):
+        y = audio_process.inv_spectrogram(np.transpose(predicted_spectr.asnumpy()))
+        audio_process.save_wave(checkpoints_dir+"/"+prefix+"_checkpoint2_"+str(i),y,hp.sr)
+    #
