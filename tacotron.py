@@ -1,4 +1,3 @@
-
 # coding: utf-8
 
 # <h1>TACOTRON</h1>
@@ -23,6 +22,8 @@ import math
 import logging
 from params import Hyperparams as hp
 import time
+
+from AudioIter import AudioIter
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -51,108 +52,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 # In[2]:
 
 
-
-# THIS IS A VERY SIMPLE ITERATOR THAT, TAKEN A LIST OF SENTENCES ENCODED AS INTEGERS, OUTPUTS THE BATCHES IN ONE HOT FORM (TO OVERCOME MEMORY ALLOCATION ISSUES)
-
-class AudioIter(mx.io.DataIter):
-    def __init__(self,
-                 audiofile_list,
-                 data_names, label_names,
-                 batch_size=10):
-
-        self.max_samples_length = int(hp.max_seconds_length*hp.sr)
-        print("max_samples_length",self.max_samples_length)
-        self.num_batches = len(audiofile_list)//batch_size
-        self.batch_size = batch_size
-        self.cur_pointer = 0
-        self.cur_batch = 0
-        self.audiofile_list = audiofile_list
-
-        max_n_frames = math.ceil(self.max_samples_length/hp.hop_length)
-        print("max_n_frames",max_n_frames)
-        self._provide_data = [
-            mx.io.DataDesc(
-                name=data_name,
-                shape=(batch_size, max_n_frames, hp.n_mels),
-                layout='NTC') for data_name in data_names
-        ]
-        self._provide_label = [
-            mx.io.DataDesc(
-                name=label_name,
-                shape=(batch_size, max_n_frames, 1+(hp.n_fft//2)),
-                layout='NTC') for label_name in label_names
-        ]
-        #assert max_len_data == max_len_label
-#         self.data = data
-#         self.label = label
-
-    def __iter__(self):
-        return self
-
-    def reset(self):
-        self.cur_batch = 0
-        self.cur_pointer = 0
-
-    def __next__(self):
-        return self.next()
-
-    @property
-    def provide_data(self):
-        return self._provide_data
-
-    @property
-    def provide_label(self):
-        return self._provide_label
-
-    def next(self):
-        if self.cur_batch < self.num_batches:
-
-            data_batch = []
-            label_batch = []
-            for i in range(self.batch_size):
-                #load the audio file
-                wav, sr = audio_process.load_wave(self.audiofile_list[self.cur_pointer])
-
-                assert sr == hp.sr
-
-                wav_length = len(wav)
-                diff = self.max_samples_length -wav_length
-                #print("num of zeros to add",diff)
-                zeros = np.zeros(diff-1) if (diff-1)>0 else []
-                #print("zeros len:",len(zeros))
-                #print("wav len:",len(wav))
-                #print("wav shape:",wav.shape)
-                padded = np.append(wav,zeros)
-                #to be totally sure
-                padded= padded[0:self.max_samples_length]
-                #print("wav pad:",len(padded))
-                # get the spectrum from the padded sound
-                spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
-                #print(spectrum_mel.shape)
-                # save into the ndarray
-        #         spectra_lin[indx,:,:]=np.transpose(spectrum_lin[:,:])
-        #         spectra_mel[indx,:,:]=np.transpose(spectrum_mel[:,:])
-                data_batch.append(np.transpose(spectrum_mel))
-                label_batch.append(np.transpose(spectrum_lin))
-                #print(spectrum_lin.shape)
-                self.cur_pointer+=1
-
-            label = [mx.nd.array(label_batch)]#, self.vocab_size_label]
-
-            data = [mx.nd.array(data_batch)]# self.vocab_size_data)] + label
-
-
-            self.cur_batch += 1
-
-            return mx.io.DataBatch(
-                data,
-                label,
-                pad=0,
-                provide_data=self._provide_data,
-                provide_label=self._provide_label
-            )
-        else:
-            raise StopIteration
 
 
 
@@ -461,7 +360,7 @@ model.fit(
         optimizer_params={'learning_rate': 0.0001, 'momentum': 0.9},
         eval_metric='mae',
         batch_end_callback = mx.callback.Speedometer(hp.batch_size, 10),
-        epoch_end_callback = mx.callback.do_checkpoint(checkpoints_dir+"/"+prefix,checkpoint_period),
+        epoch_end_callback = mx.callback.do_checkpoint(checkpoints_dir+"/"+prefix),
         num_epoch=hp.num_epochs
 )
 
