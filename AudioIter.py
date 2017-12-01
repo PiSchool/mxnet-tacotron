@@ -63,7 +63,7 @@ class AudioIter(mx.io.DataIter):
         for audio_path in self.audiofile_list:
             self.files_queue.put(audio_path)
 
-        self.threadpool = multiprocessing.Pool(1, self.create_batches, (self.files_queue,))
+        self.threadpool = multiprocessing.Pool(self.poolsize, self.create_batches, (self.files_queue,))
         
         time.sleep(60*5)
 
