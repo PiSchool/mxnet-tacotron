@@ -3,12 +3,12 @@ class Hyperparams:
     '''Hyper parameters'''
 
     # dataset used
-    dataset_name = "digit_200"
+    dataset_name = "bible"
 
     batch_size = 5
     csv_file = '../train_data/dataset.csv'
 
-    num_epochs = 100
+    num_epochs = 2
     if dataset_name == "digit_50":
         sr = 8000
         batch_size=5

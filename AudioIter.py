@@ -23,14 +23,14 @@ class AudioIter(mx.io.DataIter):
         self.num_batches = len(audiofile_list)//batch_size
         self.batch_size = batch_size
         self.cur_batch = 0
-        self.poolsize=multiprocessing.cpu_count()//2
+        self.poolsize=multiprocessing.cpu_count()
         self.audiofile_list = audiofile_list
         self.batches_queue = multiprocessing.Queue()
         self.files_queue = multiprocessing.Queue()
         for audio_path in self.audiofile_list:
             self.files_queue.put(audio_path)
 
-        self.threadpool = multiprocessing.Pool(1, self.create_batches, (self.files_queue,))
+        self.threadpool = multiprocessing.Pool(self.poolsize, self.create_batches, (self.files_queue,))
 
         max_n_frames = math.ceil(self.max_samples_length/hp.hop_length)
         print("max_n_frames",max_n_frames)
@@ -47,7 +47,7 @@ class AudioIter(mx.io.DataIter):
                 layout='NTC') for label_name in label_names
         ]
 
-        #time.sleep(60*2)
+        time.sleep(60*5)
         #assert max_len_data == max_len_label
 #         self.data = data
 #         self.label = label
@@ -64,6 +64,8 @@ class AudioIter(mx.io.DataIter):
             self.files_queue.put(audio_path)
 
         self.threadpool = multiprocessing.Pool(1, self.create_batches, (self.files_queue,))
+        
+        time.sleep(60*5)
 
     def __next__(self):
         return self.next()
@@ -88,6 +90,10 @@ class AudioIter(mx.io.DataIter):
 
                 data = [mx.nd.array(data_batch)]# self.vocab_size_data)] + label
 
+                data_batch = None
+                label_batch = None
+
+                batch = None
 
                 self.cur_batch += 1
 
@@ -104,8 +110,6 @@ class AudioIter(mx.io.DataIter):
         except Empty:
             self.threadpool.terminate()
             raise StopIteration
-        #except Exception as e:
-        #    raise StopIteration
 
     def create_batches(self,queue):
 
@@ -151,5 +155,3 @@ class AudioIter(mx.io.DataIter):
         except Empty:
             data_batch[:]
             label_batch[:]
-        #except Exception as e:
-        #    print(e)
