@@ -90,10 +90,10 @@ class AudioIter(mx.io.DataIter):
 
                 data = [mx.nd.array(data_batch)]# self.vocab_size_data)] + label
 
-                data_batch = None
-                label_batch = None
+                del data_batch
+                del label_batch
 
-                batch = None
+                del batch
 
                 self.cur_batch += 1
 
@@ -150,8 +150,12 @@ class AudioIter(mx.io.DataIter):
                 if cur_pointer == self.batch_size :
                     self.batches_queue.put([data_batch,label_batch], block=True)
                     cur_pointer = 0
+                    del data_batch
+                    del label_batch
                     data_batch = []
                     label_batch = []
         except Empty:
-            data_batch[:]
-            label_batch[:]
+            del data_batch
+            del label_batch
+            data_batch = []
+            label_batch = []
