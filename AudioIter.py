@@ -4,39 +4,35 @@ import mxnet as mx
 import numpy as np
 import audio_process
 import math
+import time
+from params import Hyperparams as hp
+from queue import Queue
+from threading import Thread
+from data_loader_multithread import spectrogramsLoader
 import multiprocessing
 from queue import Empty
-from params import Hyperparams as hp
-import time
-
-
-
-
 class AudioIter(mx.io.DataIter):
-    def __init__(self,
-                 audiofile_list,
+    def __init__(self,audiofile_list,
                  data_names, label_names,
                  concurrency = None,
                  start_immediately = False,
+                 name= None,
                  batch_size=10):
 
         self.max_samples_length = int(hp.max_seconds_length*hp.sr)
-        print("max_samples_length",self.max_samples_length)
+        #print("max_samples_length",self.max_samples_length)
         self.num_batches = len(audiofile_list)//batch_size
         self.batch_size = batch_size
         self.cur_batch = 0
         self.start_immediately = start_immediately
-        self.poolsize=multiprocessing.cpu_count() if concurrency == None else concurrency
-        self.audiofile_list = audiofile_list
-        self.batches_queue = multiprocessing.Queue()
-        self.files_queue = multiprocessing.Queue()
-        for audio_path in self.audiofile_list:
-            self.files_queue.put(audio_path)
+        self.sleeptime = 1
 
-        self.threadpool = multiprocessing.Pool(self.poolsize, self.create_batches, (self.files_queue,))
+        self.spectrogramsLoader = spectrogramsLoader(audiofile_list)
+        self.spectrogramsLoader.start()
 
+        self.name = name
         max_n_frames = math.ceil(self.max_samples_length/hp.hop_length)
-        print("max_n_frames",max_n_frames)
+        #print("max_n_frames",max_n_frames)
         self._provide_data = [
             mx.io.DataDesc(
                 name=data_name,
@@ -50,28 +46,18 @@ class AudioIter(mx.io.DataIter):
                 layout='NTC') for label_name in label_names
         ]
 
-        if not self.start_immediately:
-            time.sleep(60*5)
-        #assert max_len_data == max_len_label
-#         self.data = data
-#         self.label = label
+        #print("size",self.spectrogramsLoader.spectraQueueSize())
 
+        #print("num batches",self.num_batches)
 
     def __iter__(self):
         return self
 
+
     def reset(self):
-        self.cur_batch = 0
-
-        self.batches_queue = multiprocessing.Queue()
-        self.files_queue = multiprocessing.Queue()
-        for audio_path in self.audiofile_list:
-            self.files_queue.put(audio_path)
-
-        self.threadpool = multiprocessing.Pool(self.poolsize, self.create_batches, (self.files_queue,))
-        
-        if not self.start_immediately:
-            time.sleep(60*5)
+        print(self.name,"reset")
+        self.spectrogramsLoader.reset()
+        self.cur_batch=0
 
     def __next__(self):
         return self.next()
@@ -85,83 +71,302 @@ class AudioIter(mx.io.DataIter):
         return self._provide_label
 
     def next(self):
-        try:
-            if self.cur_batch < (self.num_batches - self.poolsize):
+        print(self.name,"cur batch:",self.cur_batch)
+        if self.cur_batch < self.num_batches:
+            q_size  = self.spectrogramsLoader.spectraQueueSize()
+            print(self.name,"q_size",q_size)
+            if q_size<self.batch_size:
+                print(self.name,"sleep for",self.sleeptime,"seconds")
+                time.sleep(self.sleeptime)
+            _data=[]
+            _labels=[]
+            for i in range(self.batch_size):
+                spectrograms = self.spectrogramsLoader.get_spectrograms()
+                _data.append(np.transpose(spectrograms[0]))
+                _labels.append(np.transpose(spectrograms[1]))
 
-                batch = self.batches_queue.get(block = True,timeout = 10)
-                data_batch = batch[0]
-                label_batch = batch[1]
+            assert len(_data) == self.batch_size
+            assert len(_labels) == self.batch_size
 
-                label = [mx.nd.array(label_batch)]#, self.vocab_size_label]
+            if self.cur_batch < self.num_batches:
+                print(self.name,"add new batch")
+                labels = [mx.nd.array(_labels)]#, self.vocab_size_label]
 
-                data = [mx.nd.array(data_batch)]# self.vocab_size_data)] + label
-
-                del data_batch
-                del label_batch
-
-                del batch
+                data = [mx.nd.array(_data)]# self.vocab_size_data)] + label
 
                 self.cur_batch += 1
 
                 return mx.io.DataBatch(
                     data,
-                    label,
+                    labels,
                     pad=0,
                     provide_data=self._provide_data,
                     provide_label=self._provide_label
                 )
-            else:
-                self.threadpool.terminate()
-                raise StopIteration
-        except Empty:
-            self.threadpool.terminate()
+
+        else:
             raise StopIteration
 
-    def create_batches(self,queue):
+# class AudioIter_2(mx.io.DataIter):
+#     def __init__(self,
+#                  audiofile_list,
+#                  data_names, label_names,
+#                  concurrency = None,
+#                  start_immediately = False,
+#                  batch_size=10):
+#
+#         self.max_samples_length = int(hp.max_seconds_length*hp.sr)
+#         print("max_samples_length",self.max_samples_length)
+#         self.num_batches = len(audiofile_list)//batch_size
+#         self.batch_size = batch_size
+#         self.cur_batch = 0
+#         self.start_immediately = start_immediately
+#         self.sleeptime = 1
+#
+#         self.spectrogramsLoader = spectrogramsLoader(audiofile_list)
+#         self.spectrogramsLoader.start()
+#
+#         max_n_frames = math.ceil(self.max_samples_length/hp.hop_length)
+#         print("max_n_frames",max_n_frames)
+#         self._provide_data = [
+#             mx.io.DataDesc(
+#                 name=data_name,
+#                 shape=(batch_size, max_n_frames, hp.n_mels),
+#                 layout='NTC') for data_name in data_names
+#         ]
+#         self._provide_label = [
+#             mx.io.DataDesc(
+#                 name=label_name,
+#                 shape=(batch_size, max_n_frames, 1+(hp.n_fft//2)),
+#                 layout='NTC') for label_name in label_names
+#         ]
+#
+#         time.sleep(10)
+#         print("size",self.spectrogramsLoader.spectraQueueSize())
+#
+#         print("num batches",self.num_batches)
+#
+#         def __iter__(self):
+#             return self
+#
+#         def reset(self):
+#             print("audio iter reset")
+#             self.spectrogramsLoader.reset()
+#             self.cur_batch=0
 
-        cur_pointer = 0
-        data_batch = []
-        label_batch = []
-        try:
-            while True:
-                audiofile = queue.get(block=True, timeout = 30)
+        # def next(self):
+        #     print("next")
+        #     try:
+        #         return mx.io.DataBatch(
+        #             mx.ndarray.zeros(self.batch_size,100, hp.n_mels) ,
+        #             mx.ndarray.zeros(self.batch_size,100, hp.n_mels) ,
+        #             pad=0,
+        #             provide_data=self._provide_data,
+        #             provide_label=self._provide_label
+        #         )
+        #         # q_size  = self.spectrogramsLoader.spectraQueueSize()
+                # print("q_size",q_size)
+                # if q_size<self.batch_size:
+                #     print("sleep for",sleeptime,"seconds")
+                #     time.sleep(self.sleeptime)
+                #
+                # _data=[]
+                # _labels=[]
+                # for i in range(self.batch_size):
+                #     spectrograms = self.spectrogramsLoader.get_spectrograms()
+                #     _data.append(spectrograms[0])
+                #     _labels.append(batch[1])
+                # if self.cur_batch < self.num_batches:
+                #     print("Add new batch")
+                #     labels = [mx.nd.array(_labels)]#, self.vocab_size_label]
+                #
+                #     data = [mx.nd.array(_data)]# self.vocab_size_data)] + label
+                #
+                #     self.cur_batch += 1
+                #
+                #     return mx.io.DataBatch(
+                #         data,
+                #         labels,
+                #         pad=0,
+                #         provide_data=self._provide_data,
+                #         provide_label=self._provide_label
+                #     )
+            # except Empty:
+            #     print("empty exc")
+            #     #self.threadpool.terminate()
+            #     raise StopIteration
 
-                #load the audio file
-                wav, sr = audio_process.load_wave(audiofile)
-
-                assert sr == hp.sr
-
-                wav_length = len(wav)
-                diff = self.max_samples_length -wav_length
-                #print("num of zeros to add",diff)
-                zeros = np.zeros(diff-1) if (diff-1)>0 else []
-                #print("zeros len:",len(zeros))
-                #print("wav len:",len(wav))
-                #print("wav shape:",wav.shape)
-                padded = np.append(wav,zeros)
-                #to be totally sure
-                padded= padded[0:self.max_samples_length]
-                #print("wav pad:",len(padded))
-                # get the spectrum from the padded sound
-                spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
-                #print(spectrum_mel.shape)
-                # save into the ndarray
-                # spectra_lin[indx,:,:]=np.transpose(spectrum_lin[:,:])
-                # spectra_mel[indx,:,:]=np.transpose(spectrum_mel[:,:])
-                data_batch.append(np.transpose(spectrum_mel))
-                label_batch.append(np.transpose(spectrum_lin))
-                #print(spectrum_lin.shape)
-                cur_pointer+=1
-
-                if cur_pointer == self.batch_size :
-                    self.batches_queue.put([data_batch,label_batch], block=True)
-                    cur_pointer = 0
-                    del data_batch
-                    del label_batch
-                    data_batch = []
-                    label_batch = []
-        except Empty:
-            del data_batch
-            del label_batch
-            data_batch = []
-            label_batch = []
+    #     def __next__(self):
+    #         return mx.io.DataBatch(
+    #             mx.ndarray.zeros(self.batch_size,100, hp.n_mels) ,
+    #             mx.ndarray.zeros(self.batch_size,100, hp.n_mels) ,
+    #             pad=0,
+    #             provide_data=self._provide_data,
+    #             provide_label=self._provide_label
+    #         )
+    #         #return self.next()
+    #
+    #
+    # @property
+    # def provide_data(self):
+    #     return self._provide_data
+    #
+    # @property
+    # def provide_label(self):
+    #     return self._provide_label
+    #
+    #
+#
+# class AudioIter(mx.io.DataIter):
+#     def __init__(self,
+#                  audiofile_list,
+#                  data_names, label_names,
+#                  concurrency = None,
+#                  start_immediately = False,
+#                  batch_size=10):
+#
+#         self.max_samples_length = int(hp.max_seconds_length*hp.sr)
+#         print("max_samples_length",self.max_samples_length)
+#         self.num_batches = len(audiofile_list)//batch_size
+#         self.batch_size = batch_size
+#         self.cur_batch = 0
+#         self.start_immediately = start_immediately
+#         self.poolsize=multiprocessing.cpu_count() if concurrency == None else concurrency
+#         self.audiofile_list = audiofile_list
+#         self.batches_queue = multiprocessing.Queue()
+#         self.files_queue = multiprocessing.Queue()
+#         for audio_path in self.audiofile_list:
+#             self.files_queue.put(audio_path)
+#
+#         self.threadpool = multiprocessing.Pool(self.poolsize, self.create_batches, (self.files_queue,))
+#
+#         max_n_frames = math.ceil(self.max_samples_length/hp.hop_length)
+#         print("max_n_frames",max_n_frames)
+#         self._provide_data = [
+#             mx.io.DataDesc(
+#                 name=data_name,
+#                 shape=(batch_size, max_n_frames, hp.n_mels),
+#                 layout='NTC') for data_name in data_names
+#         ]
+#         self._provide_label = [
+#             mx.io.DataDesc(
+#                 name=label_name,
+#                 shape=(batch_size, max_n_frames, 1+(hp.n_fft//2)),
+#                 layout='NTC') for label_name in label_names
+#         ]
+#
+#         if not self.start_immediately:
+#             time.sleep(60*5)
+#         #assert max_len_data == max_len_label
+# #         self.data = data
+# #         self.label = label
+#
+#
+#     def __iter__(self):
+#         return self
+#
+#     def reset(self):
+#         self.cur_batch = 0
+#
+#         self.batches_queue = multiprocessing.Queue()
+#         self.files_queue = multiprocessing.Queue()
+#         for audio_path in self.audiofile_list:
+#             self.files_queue.put(audio_path)
+#
+#         self.threadpool = multiprocessing.Pool(self.poolsize, self.create_batches, (self.files_queue,))
+#
+#         if not self.start_immediately:
+#             time.sleep(60*5)
+#
+#     def __next__(self):
+#         return self.next()
+#
+#     @property
+#     def provide_data(self):
+#         return self._provide_data
+#
+#     @property
+#     def provide_label(self):
+#         return self._provide_label
+#
+#     def next(self):
+#         try:
+#             if self.cur_batch < (self.num_batches - self.poolsize):
+#
+#                 batch = self.batches_queue.get(block = True,timeout = 10)
+#                 data_batch = batch[0]
+#                 label_batch = batch[1]
+#
+#                 label = [mx.nd.array(label_batch)]#, self.vocab_size_label]
+#
+#                 data = [mx.nd.array(data_batch)]# self.vocab_size_data)] + label
+#
+#                 del data_batch
+#                 del label_batch
+#
+#                 del batch
+#
+#                 self.cur_batch += 1
+#
+#                 return mx.io.DataBatch(
+#                     data,
+#                     label,
+#                     pad=0,
+#                     provide_data=self._provide_data,
+#                     provide_label=self._provide_label
+#                 )
+#             else:
+#                 self.threadpool.terminate()
+#                 raise StopIteration
+#         except Empty:
+#             self.threadpool.terminate()
+#             raise StopIteration
+#
+#     def create_batches(self,queue):
+#
+#         cur_pointer = 0
+#         data_batch = []
+#         label_batch = []
+#         try:
+#             while True:
+#                 audiofile = queue.get(block=True, timeout = 30)
+#
+#                 #load the audio file
+#                 wav, sr = audio_process.load_wave(audiofile)
+#
+#                 assert sr == hp.sr
+#
+#                 wav_length = len(wav)
+#                 diff = self.max_samples_length -wav_length
+#                 #print("num of zeros to add",diff)
+#                 zeros = np.zeros(diff-1) if (diff-1)>0 else []
+#                 #print("zeros len:",len(zeros))
+#                 #print("wav len:",len(wav))
+#                 #print("wav shape:",wav.shape)
+#                 padded = np.append(wav,zeros)
+#                 #to be totally sure
+#                 padded= padded[0:self.max_samples_length]
+#                 #print("wav pad:",len(padded))
+#                 # get the spectrum from the padded sound
+#                 spectrum_lin, spectrum_mel=audio_process.do_spectrograms(y=padded)
+#                 #print(spectrum_mel.shape)
+#                 # save into the ndarray
+#                 # spectra_lin[indx,:,:]=np.transpose(spectrum_lin[:,:])
+#                 # spectra_mel[indx,:,:]=np.transpose(spectrum_mel[:,:])
+#                 data_batch.append(np.transpose(spectrum_mel))
+#                 label_batch.append(np.transpose(spectrum_lin))
+#                 #print(spectrum_lin.shape)
+#                 cur_pointer+=1
+#
+#                 if cur_pointer == self.batch_size :
+#                     self.batches_queue.put([data_batch,label_batch], block=True)
+#                     cur_pointer = 0
+#                     del data_batch
+#                     del label_batch
+#                     data_batch = []
+#                     label_batch = []
+#         except Empty:
+#             del data_batch
+#             del label_batch
+#             data_batch = []
+#             label_batch = []

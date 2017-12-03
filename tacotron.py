@@ -10,7 +10,7 @@ import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd
 from IPython.display import clear_output
-ctx= mx.gpu(0)
+ctx= mx.cpu()
 import csv
 import codecs
 import re
@@ -90,6 +90,7 @@ def open_data(input_file_path):
         texts.append(text)
         sound_files.append(sound_file)
 
+
     return texts, sound_files
 
 # In[4]:
@@ -110,9 +111,9 @@ def get_iterators():
 
     train_set = np.ndarray.take(np.asarray(sound_files_list),train_indxs)
     eval_set = np.ndarray.take(np.asarray(sound_files_list),eval_indxs)
-    
-    train_iter = AudioIter(train_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size)
-    eval_iter = AudioIter(eval_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size)
+
+    train_iter = AudioIter(train_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size, name="train")
+    eval_iter = AudioIter(eval_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size, name="eval")
 
     return train_iter, eval_iter
 
@@ -365,6 +366,7 @@ if __name__ == "__main__":
     print("- Conv1DBank. use batch normalization:",hp.use_convBank_batchNorm)
     print("- Projection_1. use batch normalization:",hp.use_proj1_batchNorm)
     print("- Projection_2. use batch normalization:",hp.use_proj2_batchNorm)
+
 
     model.fit(
             traindata_iterator,
