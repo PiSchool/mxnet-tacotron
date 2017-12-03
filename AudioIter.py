@@ -26,7 +26,7 @@ class AudioIter(mx.io.DataIter):
         self.batch_size = batch_size
         self.cur_batch = 0
         self.start_immediately = start_immediately
-        self.poolsize=multiprocessing.cpu_count() if concurrency == None else concurrency
+        self.poolsize=(multiprocessing.cpu_count() -1) if concurrency == None else concurrency
         self.audiofile_list = audiofile_list
         self.batches_queue = multiprocessing.Queue()
         self.files_queue = multiprocessing.Queue()

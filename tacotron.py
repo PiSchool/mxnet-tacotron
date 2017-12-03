@@ -345,8 +345,6 @@ if __name__ == "__main__":
     # In[14]:
 
 
-    hp.num_epochs=20
-
     checkpoints_dir = expanduser("~")+"/results/CBHG_model/"+hp.dataset_name+"/"+"".join(str(time.time()).split('.'))
     prefix = hp.dataset_name
     checkpoint_period = hp.num_epochs//2;
