@@ -39,8 +39,8 @@ if __name__ == "__main__":
     linear_spectrogram = mx.sym.Variable('linear_spectrogram')
     mel_spectrogram = mx.sym.Variable('mel_spectrogram')
 
-    checkpoints_dir = expanduser("~")+"/results/CBHG_model/"+hp.dataset_name+"/1512142976470519"
     prefix = hp.dataset_name
+    checkpoints_dir = expanduser("~")+"/results/CBHG_model/"+prefix+"/1512142976470519"
 
     sym_1, arg_params_1, aux_params_1 = mx.model.load_checkpoint(checkpoints_dir+"/"+prefix, 1)
     model = mx.mod.Module(symbol=sym_1, context=ctx,data_names=['mel_spectrogram'],label_names=['linear_spectrogram'])

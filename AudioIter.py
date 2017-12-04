@@ -16,8 +16,6 @@ from queue import Empty
 class AudioIter(mx.io.DataIter):
     def __init__(self,audiofile_list,
                  data_names, label_names,
-                 concurrency = None,
-                 start_immediately = False,
                  name= None,
                  num_threads=None,
                  batch_size=10):
@@ -27,14 +25,10 @@ class AudioIter(mx.io.DataIter):
         self.num_batches = len(audiofile_list)//batch_size
         self.batch_size = batch_size
         self.cur_batch = 0
-        self.start_immediately = start_immediately
         self.hasStarted = False
         self.sleeptime = 10
 
         self.spectrogramsLoader = spectrogramsLoader(audiofile_list,num_threads)
-        if self.start_immediately:
-            self.spectrogramsLoader.start()
-            self.hasStarted=True
 
         self.name = name
         max_n_frames = math.ceil(self.max_samples_length/hp.hop_length)
@@ -78,6 +72,9 @@ class AudioIter(mx.io.DataIter):
         return self._provide_label
 
     def next(self):
+        if not self.hasStarted:
+            self.spectrogramsLoader.start()
+            self.hasStarted=True
         #print(self.name,"cur batch:",self.cur_batch)
         if self.cur_batch < self.num_batches:
             q_size  = self.spectrogramsLoader.spectraQueueSize()
