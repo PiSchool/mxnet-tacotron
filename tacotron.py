@@ -367,12 +367,14 @@ if __name__ == "__main__":
         for f in glob.glob(checkpoints_dir+'/'+checkpoint_dir+'/'+hp.dataset_name+'-*.params'):
             latest_epoch=max(latest_epoch,int(f.split('/')[-1].split(hp.dataset_name)[1].split('-')[1].split('.')[0]))
 
+        checkpoint_dir = checkpoints_dir +'/'+ checkpoint_dir
+
         print("Loding model from epoch",latest_epoch)
 
-        sym, arg_params, aux_params = mx.model.load_checkpoint(checkpoint_dir+'/'+prefix, hp.num_epochs)
+        sym, arg_params, aux_params = mx.model.load_checkpoint(checkpoint_dir+'/'+prefix, latest_epoch)
         model = mx.mod.Module(symbol=sym, context=ctx,data_names=['mel_spectrogram'],label_names=['linear_spectrogram'])
 
-        model.bind(for_training=False, data_shapes= traindata_iterator.provide_data, label_shapes=traindata_iterator.provide_label)
+        model.bind(for_training=True, data_shapes= traindata_iterator.provide_data, label_shapes=traindata_iterator.provide_label)
         # assign the loaded parameters to the module
 
         model.set_params(arg_params, aux_params)
@@ -383,7 +385,6 @@ if __name__ == "__main__":
         print("- Batch size:",hp.batch_size)
         print("- Epochs:",hp.num_epochs)
         print("- Starting from epoch:", latest_epoch)
-        print("- Checkpoint period:",checkpoint_period)
         print("- Conv1DBank. use batch normalization:",hp.use_convBank_batchNorm)
         print("- Projection_1. use batch normalization:",hp.use_proj1_batchNorm)
         print("- Projection_2. use batch normalization:",hp.use_proj2_batchNorm)

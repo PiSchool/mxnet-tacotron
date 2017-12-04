@@ -100,7 +100,6 @@ class spectrogramsLoader:
         try:
             return self.results.get(block=True, timeout=30)
         except Empty:
-            print(e)
             print("Queue get timeout or queue empty")
     def spectraQueueSize(self):
         return self.results.qsize()
