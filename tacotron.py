@@ -10,7 +10,7 @@ import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd
 from IPython.display import clear_output
-ctx= mx.cpu()
+ctx= mx.gpu(0)
 import csv
 import codecs
 import re
@@ -97,23 +97,24 @@ def open_data(input_file_path):
 
 def get_iterators():
     texts_list, sound_files_list = open_data(hp.csv_file)
-
+    #sound_files_list=sound_files_list[0:len(sound_files_list)//20]
     size=len(sound_files_list)
-    # get 10% of dataset as eval data
-    eval_indxs = (np.random.randint(0, high=size, size=size//10))
+
+    # get 5% of dataset as eval data
+    eval_indxs = (np.random.randint(0, high=size, size=size//20))
 
     # remaining indexes for the train
     train_indxs = np.setdiff1d(np.arange(size),eval_indxs)
 
 
-    print("I will take those for eval:",eval_indxs)
+    print("I will take these for eval:",eval_indxs)
     #print("..and the remaining for train:",train_indxs,"\n")
 
     train_set = np.ndarray.take(np.asarray(sound_files_list),train_indxs)
     eval_set = np.ndarray.take(np.asarray(sound_files_list),eval_indxs)
 
-    train_iter = AudioIter(train_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size, name="train")
-    eval_iter = AudioIter(eval_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size, name="eval")
+    train_iter = AudioIter(train_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size, name="train",num_threads=4,start_immediately=True)
+    eval_iter = AudioIter(eval_set,["mel_spectrogram"],["linear_spectrogram"],batch_size = hp.batch_size, name="eval",num_threads=4)
 
     return train_iter, eval_iter
 

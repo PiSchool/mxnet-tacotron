@@ -45,19 +45,24 @@ class Worker(multiprocessing.Process):
 
 
 class spectrogramsLoader:
-    def __init__(self,audioFiles):
+    def __init__(self,audioFiles,num_threads):
         self.audioFiles = audioFiles
         self.audioFilesQueue = multiprocessing.JoinableQueue()
         self.results = multiprocessing.Queue()
         # Start consumers
-        self.num_workers = multiprocessing.cpu_count()
+        if num_threads > multiprocessing.cpu_count():
+            num_threads = multiprocessing.cpu_count()
+        self.num_workers = num_threads if num_threads else multiprocessing.cpu_count()
         print('Creating {} consumers'.format(self.num_workers))
 
     def start(self):
         print("Data loading started")
+
         for audioFile in (self.audioFiles):
             self.audioFilesQueue.put(audioFile)
-        self.audioFilesQueue.put(None)
+
+        for _ in range(self.num_workers):
+            self.audioFilesQueue.put(None)
         self.workers = [
             Worker(self.audioFilesQueue, self.results)
             for i in range(self.num_workers)
