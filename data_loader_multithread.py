@@ -2,11 +2,13 @@ import numpy as np
 import multiprocessing
 from queue import Empty
 import time
+import os.path
 import audio_process
+import pickle
 from params import Hyperparams as hp
 
-def do_spectrograms(audioFile):
-    wav, sr = audio_process.load_wave(audioFile)
+def do_spectrograms(audio_file):
+    wav, sr = audio_process.load_wave(audio_file)
     max_samples_length = int(hp.max_seconds_length*hp.sr)
     assert sr == hp.sr
     diff = max_samples_length - len(wav)
@@ -32,23 +34,35 @@ class Worker(multiprocessing.Process):
     def run(self):
         proc_name = self.name
         while True:
-            audioFile = self.audio_queue.get()
-            if audioFile is None:
+            audio_file = self.audio_queue.get()
+            if audio_file is None:
                 # Poison pill means shutdown
                 print('{}: Exiting'.format(proc_name))
                 self.audio_queue.task_done()
                 break
-            #print('{}: {}'.format(proc_name, audioFile))
-            lin, mel = do_spectrograms(audioFile)
+            #print('{}: {}'.format(proc_name, audio_file))
+            lin_path = audio_file+'.lin'
+            mel_path = audio_file+'.mel'
+
+            if os.path.exists(lin_path) and os.path.exists(mel_path):
+                lin = pickle.load(open(lin_path, "rb"))
+                mel = pickle.load(open(mel_path, "rb"))
+            else:
+                lin, mel = do_spectrograms(audio_file)
+
+                pickle.dump(lin, open(lin_path, "wb"))
+                pickle.dump(mel, open(mel_path, "wb"))
+
             self.audio_queue.task_done()
             self.result_queue.put([mel,lin])
 
 
 class spectrogramsLoader:
-    def __init__(self,audioFiles,num_threads):
-        self.audioFiles = audioFiles
-        self.audioFilesQueue = multiprocessing.JoinableQueue()
+    def __init__(self, audio_files, num_threads):
+        self.audio_files = audio_files
+        self.audio_files_queue = multiprocessing.JoinableQueue()
         self.results = multiprocessing.Queue()
+
         # Start consumers
         if num_threads > multiprocessing.cpu_count():
             num_threads = multiprocessing.cpu_count()
@@ -58,19 +72,19 @@ class spectrogramsLoader:
     def start(self):
         print("Data loading started")
 
-        for audioFile in (self.audioFiles):
-            self.audioFilesQueue.put(audioFile)
+        for audio_file in (self.audio_files):
+            self.audio_files_queue.put(audio_file)
 
         for _ in range(self.num_workers):
-            self.audioFilesQueue.put(None)
+            self.audio_files_queue.put(None)
         self.workers = [
-            Worker(self.audioFilesQueue, self.results)
+            Worker(self.audio_files_queue, self.results)
             for i in range(self.num_workers)
         ]
         for w in self.workers:
             w.start()
         # Wait for all of the tasks to finish
-        #self.audioFilesQueue.join()
+        #self.audio_files_queue.join()
     def reset(self):
         print("data loader reset")
         for w in self.workers:
@@ -78,7 +92,7 @@ class spectrogramsLoader:
             w.join()
         print("All worker terminated")
         print("Create new queues")
-        self.audioFilesQueue = multiprocessing.JoinableQueue()
+        self.audio_files_queue = multiprocessing.JoinableQueue()
         self.results = multiprocessing.Queue()
         print("Start again")
         self.start()
