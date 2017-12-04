@@ -33,28 +33,27 @@ class Worker(multiprocessing.Process):
 
     def run(self):
         proc_name = self.name
-        while True:
-            audio_file = self.audio_queue.get()
-            if audio_file is None:
-                # Poison pill means shutdown
-                print('{}: Exiting'.format(proc_name))
+        try:
+            while True:
+                audio_file = self.audio_queue.get(block = True, timeout = 2)
+
+                lin_path = audio_file+'.lin'
+                mel_path = audio_file+'.mel'
+
+                if os.path.exists(lin_path) and os.path.exists(mel_path):
+                    lin = pickle.load(open(lin_path, "rb"))
+                    mel = pickle.load(open(mel_path, "rb"))
+                else:
+                    lin, mel = do_spectrograms(audio_file)
+
+                    pickle.dump(lin, open(lin_path, "wb"))
+                    pickle.dump(mel, open(mel_path, "wb"))
+
                 self.audio_queue.task_done()
-                break
-            #print('{}: {}'.format(proc_name, audio_file))
-            lin_path = audio_file+'.lin'
-            mel_path = audio_file+'.mel'
-
-            if os.path.exists(lin_path) and os.path.exists(mel_path):
-                lin = pickle.load(open(lin_path, "rb"))
-                mel = pickle.load(open(mel_path, "rb"))
-            else:
-                lin, mel = do_spectrograms(audio_file)
-
-                pickle.dump(lin, open(lin_path, "wb"))
-                pickle.dump(mel, open(mel_path, "wb"))
-
-            self.audio_queue.task_done()
-            self.result_queue.put([mel,lin])
+                self.result_queue.put([mel,lin])
+        except queue.Empty:
+            print("Empty queue")
+            pass
 
 
 class spectrogramsLoader:
@@ -75,8 +74,6 @@ class spectrogramsLoader:
         for audio_file in (self.audio_files):
             self.audio_files_queue.put(audio_file)
 
-        for _ in range(self.num_workers):
-            self.audio_files_queue.put(None)
         self.workers = [
             Worker(self.audio_files_queue, self.results)
             for i in range(self.num_workers)
@@ -90,7 +87,7 @@ class spectrogramsLoader:
         for w in self.workers:
             w.terminate()
             w.join()
-        print("All worker terminated")
+        print("All workers terminated")
         print("Create new queues")
         self.audio_files_queue = multiprocessing.JoinableQueue()
         self.results = multiprocessing.Queue()
