@@ -394,7 +394,7 @@ if __name__ == "__main__":
                 traindata_iterator,
                 eval_data=evaldata_iterator,
                 optimizer=mx.optimizer.Adam(rescale_grad=1/hp.batch_size),
-                optimizer_params={'learning_rate': 0.0001, 'momentum': 0.9},
+                optimizer_params={'learning_rate': 0.005, 'momentum': 0.9},
                 eval_metric='mae',
                 batch_end_callback = mx.callback.Speedometer(hp.batch_size, 10),
                 epoch_end_callback = mx.callback.do_checkpoint(checkpoint_dir+'/'+prefix),
