@@ -51,7 +51,7 @@ class Worker(multiprocessing.Process):
 
                 self.audio_queue.task_done()
                 self.result_queue.put([mel,lin])
-        except queue.Empty:
+        except Empty:
             print("Empty queue")
             pass
 
