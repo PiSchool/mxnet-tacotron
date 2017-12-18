@@ -32,8 +32,9 @@ This project has been developed on
 
 ## Authors
 
-* **Alberto Massidda** - https://github.com/aijanai
-* **Stefano Artuso**
+This project was developed by [Alberto Massidda](https://github.com/aijanai) and [Stefano Artuso](https://github.com/nefastosaturo) during Pi School's AI programme](http://picampus-school.com/programme/school-of-ai/) in Fall 2017.
+ 
+![photo of Alberto Massidda](http://picampus-school.com/wp-content/uploads/2017/11/IMG_2125-2-150x150.jpg) ![photo of Stefano Artuso](http://picampus-school.com/wp-content/uploads/2017/11/IMG_2043-2-150x150.jpg)
 
 ## Acknowledgments
 * Thanks to Roberto Barra Chicote for supporting us
